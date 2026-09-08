@@ -24,7 +24,7 @@ Integración personalizada para **Home Assistant** que conecta con la **Oficina 
   - Sensor global de última factura emitida con atributos detallados: fecha, importe, equipo y URL directa para descargar el recibo en PDF.
 - ⚙️ **Configuración sencilla mediante interfaz gráfica (UI)**:
   - Pide únicamente tu **correo electrónico (email)** y tu **contraseña**.
-  - Soporta ajuste de intervalo de actualización (por defecto cada 6 horas).
+  - Soporta ajuste de intervalo de actualización (por defecto cada 12 horas).
   - Admite reautenticación automática si cambias de contraseña.
 
 ---
@@ -80,7 +80,7 @@ La integración organiza las entidades en dispositivos independientes:
 4. Rellena el formulario con tus credenciales de la oficina virtual:
    - **Correo electrónico (Email)**: Tu email de acceso a [oficina.ista.es](https://oficina.ista.es).
    - **Contraseña**: Tu clave de acceso.
-   - **Intervalo de actualización**: Frecuencia en horas (por defecto: `6` horas).
+   - **Intervalo de actualización**: Frecuencia en horas (por defecto: `12` horas).
 5. Pulsa **Enviar**. La integración comprobará las credenciales y creará automáticamente los dispositivos y sensores.
 
 ---
