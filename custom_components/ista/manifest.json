@@ -1,0 +1,15 @@
+{
+  "domain": "ista",
+  "name": "Ista",
+  "codeowners": ["@diegoaf4"],
+  "config_flow": true,
+  "documentation": "https://github.com/diegoaf4/integracion-ista-ha",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/diegoaf4/integracion-ista-ha/issues",
+  "requirements": [
+    "beautifulsoup4>=4.12.0",
+    "requests>=2.28.0"
+  ],
+  "version": "1.0.0"
+}

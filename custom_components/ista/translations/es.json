@@ -1,0 +1,73 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Conectar con Ista España",
+        "description": "Introduce el correo electrónico (usuario) y la contraseña de tu cuenta en la oficina virtual de Ista (oficina.ista.es).",
+        "data": {
+          "username": "Correo electrónico (Email)",
+          "password": "Contraseña",
+          "scan_interval": "Intervalo de actualización (horas)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reautenticar con Ista",
+        "description": "Las credenciales han caducado o cambiado. Introduce de nuevo tu contraseña para continuar.",
+        "data": {
+          "password": "Contraseña"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No se pudo conectar con el portal de Ista. Comprueba tu conexión a internet o el estado del servidor.",
+      "invalid_auth": "Usuario (email) o contraseña incorrectos.",
+      "unknown": "Error inesperado al conectar con Ista."
+    },
+    "abort": {
+      "already_configured": "Esta cuenta de Ista ya está configurada en Home Assistant.",
+      "reauth_successful": "Reautenticación realizada con éxito."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones de Ista",
+        "description": "Ajusta la frecuencia con la que Home Assistant consulta las lecturas y facturas en el portal de Ista.",
+        "data": {
+          "scan_interval": "Intervalo de actualización (horas)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "hot_water_current_reading": {
+        "name": "Agua caliente lectura actual"
+      },
+      "hot_water_last_billed_consumption": {
+        "name": "Agua caliente último consumo facturado"
+      },
+      "hot_water_unbilled_consumption": {
+        "name": "Agua caliente consumo no facturado"
+      },
+      "hot_water_latest_receipt": {
+        "name": "Agua caliente última factura"
+      },
+      "heating_current_reading": {
+        "name": "Calefacción lectura actual"
+      },
+      "heating_last_billed_consumption": {
+        "name": "Calefacción último consumo facturado"
+      },
+      "heating_unbilled_consumption": {
+        "name": "Calefacción consumo no facturado"
+      },
+      "heating_latest_receipt": {
+        "name": "Calefacción última factura"
+      },
+      "latest_receipt_overall": {
+        "name": "Última factura Ista"
+      }
+    }
+  }
+}

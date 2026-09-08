@@ -1,0 +1,73 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect with Ista Spain",
+        "description": "Enter your email (username) and password for your account in the Ista virtual office (oficina.ista.es).",
+        "data": {
+          "username": "Email address",
+          "password": "Password",
+          "scan_interval": "Update interval (hours)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate with Ista",
+        "description": "Credentials have expired or changed. Please enter your password again to continue.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not connect to the Ista portal. Check your internet connection or server status.",
+      "invalid_auth": "Invalid username (email) or password.",
+      "unknown": "Unexpected error connecting to Ista."
+    },
+    "abort": {
+      "already_configured": "This Ista account is already configured in Home Assistant.",
+      "reauth_successful": "Reauthentication successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Ista Options",
+        "description": "Adjust how often Home Assistant fetches meter readings and bills from the Ista portal.",
+        "data": {
+          "scan_interval": "Update interval (hours)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "hot_water_current_reading": {
+        "name": "Hot water current reading"
+      },
+      "hot_water_last_billed_consumption": {
+        "name": "Hot water last billed consumption"
+      },
+      "hot_water_unbilled_consumption": {
+        "name": "Hot water unbilled consumption"
+      },
+      "hot_water_latest_receipt": {
+        "name": "Hot water latest bill"
+      },
+      "heating_current_reading": {
+        "name": "Heating current reading"
+      },
+      "heating_last_billed_consumption": {
+        "name": "Heating last billed consumption"
+      },
+      "heating_unbilled_consumption": {
+        "name": "Heating unbilled consumption"
+      },
+      "heating_latest_receipt": {
+        "name": "Heating latest bill"
+      },
+      "latest_receipt_overall": {
+        "name": "Latest Ista bill"
+      }
+    }
+  }
+}
