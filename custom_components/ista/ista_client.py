@@ -95,19 +95,31 @@ class IstaClient:
 
     def download_receipt_pdf(self, receipt_id: str) -> bytes:
         """Download receipt PDF by receipt ID."""
-        self.login()
         url = (
             f"{self.BASE_URL}/GesCon/GestionFacturacion.do"
             f"?metodo=duplicarReciboIndividualCalista&idRecibo={receipt_id}"
         )
         try:
-            r = self.session.get(url, timeout=40)
+            r = self.session.get(url, timeout=40, allow_redirects=False)
+            if r.status_code in (301, 302, 303, 307):
+                loc = r.headers.get("Location", "")
+                if "login.ista.com" in loc or "MainPageAbo.do" in loc:
+                    _LOGGER.debug("Session expired, renewing Ista session...")
+                    self.login()
+                    r = self.session.get(url, timeout=40, allow_redirects=False)
+                elif "gescon.ista.net" in loc or "calista.php" in loc:
+                    raise IstaConnectionError(
+                        "Factura histórica no disponible (servidor interno legado no accesible en Ista)"
+                    )
+                elif loc:
+                    r = self.session.get(loc, timeout=40)
+
             r.raise_for_status()
-            if "login.ista.com" in r.url:
-                raise IstaAuthError("Session expired downloading receipt")
+            if not r.content or not r.content.startswith(b"%PDF"):
+                raise IstaConnectionError("La respuesta del portal no contiene un archivo PDF válido")
             return r.content
         except requests.RequestException as err:
-            raise IstaConnectionError(f"Failed to download receipt {receipt_id}: {err}") from err
+            raise IstaConnectionError(f"Error al descargar la factura {receipt_id}: {err}") from err
 
     def fetch_data(self) -> Dict[str, Any]:
         """Fetch all data: account, hot water readings, heating readings, and invoices."""

@@ -15,6 +15,7 @@ from datetime import datetime
 import os
 import re
 import sys
+import time
 from typing import Any, Dict, List, Optional, Set
 from urllib.parse import parse_qs, urlparse
 
@@ -306,8 +307,9 @@ def main() -> None:
                 f.write(pdf_bytes)
             print("OK")
             descargados += 1
+            time.sleep(0.25)
         except Exception as err:
-            print(f"ERROR ({err})")
+            print(f"AVISO ({err})")
             errores += 1
 
     print("\n" + "=" * 60)
