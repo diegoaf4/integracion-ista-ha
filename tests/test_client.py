@@ -58,6 +58,13 @@ class TestIstaClient(unittest.TestCase):
         # Check receipts
         self.assertGreater(len(data["receipts"]), 0)
 
+        # Check PDF download of latest receipt
+        latest_rec_id = data["receipts"][0].get("receipt_id")
+        if latest_rec_id:
+            pdf_bytes = client.download_receipt_pdf(latest_rec_id)
+            self.assertGreater(len(pdf_bytes), 1000)
+            self.assertTrue(pdf_bytes.startswith(b"%PDF"))
+
 
 if __name__ == "__main__":
     unittest.main()

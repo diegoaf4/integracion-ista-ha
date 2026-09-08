@@ -132,6 +132,106 @@ entities:
 
 ---
 
+## Descarga Automática de Facturas y Automatizaciones (Email / FTP)
+
+La integración incluye un sistema de detección y descarga de facturas nuevas:
+
+1. Cuando Ista emite un nuevo recibo, la integración descarga automáticamente el PDF a la carpeta configurada (por defecto: `/config/www/ista_facturas/`).
+2. Se dispara de forma nativa el evento **`ista_new_invoice`** en Home Assistant con toda la información necesaria:
+   - `file_path`: Ruta local al archivo PDF descargado (ej. `/config/www/ista_facturas/factura_ista_10-08-2026_agua_caliente_N5p2.pdf`).
+   - `file_name`: Nombre del archivo.
+   - `url_path`: Enlace web local (accesible en `/local/ista_facturas/...` para visualización en el navegador).
+   - `amount`: Importe en euros.
+   - `type`: Tipo de factura (`Agua caliente` u `Optosonic`).
+   - `date`: Fecha de la factura.
+
+> [!TIP]
+> Puedes configurar la carpeta de destino o desactivar la descarga automática desde **Ajustes** -> **Dispositivos y Servicios** -> **Ista** -> **Configurar / Opciones**.
+
+### Ejemplo 1: Enviar la nueva factura por Correo Electrónico (Email / SMTP)
+
+Utilizando el servicio de notificación por correo de Home Assistant ([SMTP](https://www.home-assistant.io/integrations/smtp/)):
+
+```yaml
+alias: "Ista: Enviar nueva factura por Email"
+description: "Envía el PDF de la factura recién emitida por correo electrónico"
+trigger:
+  - platform: event
+    event_type: ista_new_invoice
+action:
+  - service: notify.notificaciones_correo # Reemplaza por tu entidad notify SMTP
+    data:
+      title: "Nueva factura Ista: {{ trigger.event.data.type }} ({{ trigger.event.data.amount }} €)"
+      message: >
+        Hola, se ha recibido una nueva factura de Ista.
+        - Concepto: {{ trigger.event.data.type }}
+        - Fecha: {{ trigger.event.data.date }}
+        - Importe: {{ trigger.event.data.amount }} €
+        Se adjunta el PDF correspondiente.
+      data:
+        images:
+          - "{{ trigger.event.data.file_path }}"
+mode: single
+```
+
+---
+
+### Ejemplo 2: Subir la nueva factura a un Servidor FTP
+
+Puedes subir automáticamente el archivo descargado a tu servidor FTP o NAS ejecutando un comando seguro mediante [`shell_command`](https://www.home-assistant.io/integrations/shell_command/):
+
+1. En tu `configuration.yaml`, añade el comando curl para subida FTP:
+```yaml
+shell_command:
+  subir_factura_ftp: 'curl -T "{{ archivo }}" "ftp://USUARIO:PASSWORD@SERVIDOR_FTP/facturas/{{ nombre }}"'
+```
+2. Crea la automatización en Home Assistant:
+```yaml
+alias: "Ista: Subir nueva factura a FTP"
+description: "Sube el PDF de la nueva factura a un servidor FTP"
+trigger:
+  - platform: event
+    event_type: ista_new_invoice
+action:
+  - service: shell_command.subir_factura_ftp
+    data:
+      archivo: "{{ trigger.event.data.file_path }}"
+      nombre: "{{ trigger.event.data.file_name }}"
+mode: single
+```
+
+---
+
+### Ejemplo 3: Enviar la factura por Telegram
+
+Si usas el bot de Telegram en Home Assistant:
+
+```yaml
+alias: "Ista: Enviar factura por Telegram"
+trigger:
+  - platform: event
+    event_type: ista_new_invoice
+action:
+  - service: telegram_bot.send_document
+    data:
+      file: "{{ trigger.event.data.file_path }}"
+      caption: "📄 Factura Ista de {{ trigger.event.data.type }}: {{ trigger.event.data.amount }} € ({{ trigger.event.data.date }})"
+mode: single
+```
+
+---
+
+### Servicio bajo demanda: `ista.download_receipt`
+
+También dispones de una acción/servicio en Home Assistant para descargar cualquier factura en cualquier momento:
+
+- **Servicio**: `ista.download_receipt`
+- **Parámetros**:
+  - `receipt_id` (opcional): ID del recibo. Si no se especifica, descarga la última factura emitida.
+  - `target_path` (opcional): Ruta absoluta de destino del PDF.
+
+---
+
 ## Licencia
 
 Este proyecto está distribuido bajo la licencia [MIT](LICENSE).

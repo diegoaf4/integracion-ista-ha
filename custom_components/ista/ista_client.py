@@ -93,6 +93,22 @@ class IstaClient:
                 return None
         return None
 
+    def download_receipt_pdf(self, receipt_id: str) -> bytes:
+        """Download receipt PDF by receipt ID."""
+        self.login()
+        url = (
+            f"{self.BASE_URL}/GesCon/GestionFacturacion.do"
+            f"?metodo=duplicarReciboIndividualCalista&idRecibo={receipt_id}"
+        )
+        try:
+            r = self.session.get(url, timeout=40)
+            r.raise_for_status()
+            if "login.ista.com" in r.url:
+                raise IstaAuthError("Session expired downloading receipt")
+            return r.content
+        except requests.RequestException as err:
+            raise IstaConnectionError(f"Failed to download receipt {receipt_id}: {err}") from err
+
     def fetch_data(self) -> Dict[str, Any]:
         """Fetch all data: account, hot water readings, heating readings, and invoices."""
         self.login()
@@ -217,8 +233,32 @@ class IstaClient:
                             target["daily_readings"] = readings_history
 
         # 3. Monthly consumptions (Billed periods)
-        # 4657: Radio agua caliente, 4790: Optosonic
         equipment_map = [("4657", "hot_water"), ("4790", "heating")]
+        try:
+            r_page = self.session.get(
+                f"{self.BASE_URL}/GesCon/GestionLecturasBusqueda.do?metodo=buscarLecturas",
+                timeout=30,
+            )
+            if r_page.status_code == 200:
+                soup_page = BeautifulSoup(r_page.text, "html.parser")
+                for select in soup_page.find_all("select"):
+                    for opt in select.find_all("option"):
+                        val = opt.get("value")
+                        text = opt.get_text(strip=True).lower()
+                        if val and val.isdigit() and val != "0":
+                            if "agua" in text:
+                                equipment_map = [
+                                    (val, "hot_water") if k == "hot_water" else (c, k)
+                                    for c, k in equipment_map
+                                ]
+                            elif "optosonic" in text or "calefacc" in text:
+                                equipment_map = [
+                                    (val, "heating") if k == "heating" else (c, k)
+                                    for c, k in equipment_map
+                                ]
+        except requests.RequestException as err:
+            _LOGGER.debug("Could not pre-fetch equipment select: %s", err)
+
         for code, key in equipment_map:
             try:
                 r_c = self.session.post(

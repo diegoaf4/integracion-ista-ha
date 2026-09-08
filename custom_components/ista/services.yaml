@@ -1,0 +1,16 @@
+download_receipt:
+  name: Descargar factura Ista
+  description: Descarga el archivo PDF de una factura de Ista al almacenamiento local de Home Assistant.
+  fields:
+    receipt_id:
+      name: ID de recibo
+      description: Identificador del recibo (opcional, por defecto se descarga la última factura emitida).
+      example: "N5p2KpC_L2bbQ_T56lPZdg"
+      selector:
+        text:
+    target_path:
+      name: Ruta de destino
+      description: Ruta absoluta en disco donde guardar el archivo PDF (opcional, por defecto se guarda en /config/www/ista_facturas/).
+      example: "/config/www/ista_facturas/mi_factura.pdf"
+      selector:
+        text:

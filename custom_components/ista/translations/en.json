@@ -32,9 +32,11 @@
     "step": {
       "init": {
         "title": "Ista Options",
-        "description": "Adjust how often Home Assistant fetches meter readings and bills from the Ista portal.",
+        "description": "Adjust how often Home Assistant queries the portal and automatic invoice downloads.",
         "data": {
-          "scan_interval": "Update interval (hours)"
+          "scan_interval": "Update interval (hours)",
+          "download_invoices": "Automatically download new invoice PDFs",
+          "invoices_path": "Local download directory in Home Assistant"
         }
       }
     }

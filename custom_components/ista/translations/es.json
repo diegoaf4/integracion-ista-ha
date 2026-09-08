@@ -32,9 +32,11 @@
     "step": {
       "init": {
         "title": "Opciones de Ista",
-        "description": "Ajusta la frecuencia con la que Home Assistant consulta las lecturas y facturas en el portal de Ista.",
+        "description": "Ajusta la frecuencia con la que Home Assistant consulta el portal y la descarga automática de facturas.",
         "data": {
-          "scan_interval": "Intervalo de actualización (horas)"
+          "scan_interval": "Intervalo de actualización (horas)",
+          "download_invoices": "Descargar automáticamente nuevas facturas en PDF",
+          "invoices_path": "Carpeta de descarga local en Home Assistant"
         }
       }
     }

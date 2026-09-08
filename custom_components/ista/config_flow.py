@@ -11,9 +11,13 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_DOWNLOAD_INVOICES,
+    CONF_INVOICES_PATH,
     CONF_PASSWORD,
     CONF_SCAN_INTERVAL,
     CONF_USERNAME,
+    DEFAULT_DOWNLOAD_INVOICES,
+    DEFAULT_INVOICES_PATH,
     DEFAULT_SCAN_INTERVAL_HOURS,
     DOMAIN,
 )
@@ -66,6 +70,8 @@ class IstaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_SCAN_INTERVAL: user_input.get(
                             CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_HOURS
                         ),
+                        CONF_DOWNLOAD_INVOICES: DEFAULT_DOWNLOAD_INVOICES,
+                        CONF_INVOICES_PATH: DEFAULT_INVOICES_PATH,
                     },
                 )
 
@@ -181,6 +187,12 @@ class IstaOptionsFlowHandler(config_entries.OptionsFlow):
         current_interval = self.config_entry.options.get(
             CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_HOURS
         )
+        current_download = self.config_entry.options.get(
+            CONF_DOWNLOAD_INVOICES, DEFAULT_DOWNLOAD_INVOICES
+        )
+        current_path = self.config_entry.options.get(
+            CONF_INVOICES_PATH, DEFAULT_INVOICES_PATH
+        )
 
         return self.async_show_form(
             step_id="init",
@@ -196,7 +208,13 @@ class IstaOptionsFlowHandler(config_entries.OptionsFlow):
                             unit_of_measurement="horas",
                             mode=selector.NumberSelectorMode.BOX,
                         )
-                    )
+                    ),
+                    vol.Optional(
+                        CONF_DOWNLOAD_INVOICES, default=current_download
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        CONF_INVOICES_PATH, default=current_path
+                    ): selector.TextSelector(),
                 }
             ),
         )
