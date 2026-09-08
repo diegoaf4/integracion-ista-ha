@@ -232,6 +232,30 @@ También dispones de una acción/servicio en Home Assistant para descargar cualq
 
 ---
 
+## Script CLI para Descarga Masiva de Facturas (`descargar_recibos.py`)
+
+Se incluye un script independiente en la raíz del repositorio para descargar el histórico de facturas en PDF desde la línea de comandos:
+
+```bash
+# Descargar TODOS los recibos históricos de la cuenta
+python3 descargar_recibos.py -u mi_email@gmail.com -p "mi_contraseña"
+
+# Descargar recibos a partir de una fecha concreta (opcional)
+python3 descargar_recibos.py -u mi_email@gmail.com -p "mi_contraseña" --fecha-desde 01/01/2026
+
+# Especificar carpeta de destino personalizada
+python3 descargar_recibos.py -u mi_email@gmail.com -p "mi_contraseña" -d 2025-06-01 -o /ruta/mis_facturas
+```
+
+### Argumentos del script:
+- `-u`, `--usuario`, `--email` (obligatorio): Correo electrónico de acceso a la oficina virtual.
+- `-p`, `--password` (obligatorio): Contraseña de acceso.
+- `-d`, `--fecha-desde` (opcional): Fecha inicial en formato `DD/MM/AAAA` o `AAAA-MM-DD`. Si se omite, se descargan **todas** las facturas históricas disponibles en tu cuenta (ej. 79 recibos).
+- `-o`, `--directorio` (opcional): Directorio donde guardar los archivos PDF (por defecto: `./facturas_ista`).
+- `--forzar` (opcional): Vuelve a descargar recibos aunque ya existan en la carpeta de destino.
+
+---
+
 ## Licencia
 
 Este proyecto está distribuido bajo la licencia [MIT](LICENSE).

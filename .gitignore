@@ -37,3 +37,7 @@ ENV/
 
 # HA testing
 .pytest_cache/
+
+# Downloaded invoices
+facturas_ista/
+*.pdf
