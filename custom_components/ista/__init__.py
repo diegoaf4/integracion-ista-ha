@@ -21,18 +21,25 @@ from .const import (
     DEFAULT_SCAN_INTERVAL_HOURS,
     DOMAIN,
     SERVICE_DOWNLOAD_RECEIPT,
+    SERVICE_IMPORT_HISTORY,
 )
 from .coordinator import IstaDataUpdateCoordinator, _save_pdf_to_disk
 from .ista_client import IstaClient
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
 
 SERVICE_DOWNLOAD_SCHEMA = vol.Schema(
     {
         vol.Optional("receipt_id"): cv.string,
         vol.Optional("target_path"): cv.string,
+    }
+)
+
+SERVICE_IMPORT_SCHEMA = vol.Schema(
+    {
+        vol.Optional("device_group"): vol.In(["hot_water", "heating"]),
     }
 )
 
@@ -112,6 +119,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             schema=SERVICE_DOWNLOAD_SCHEMA,
         )
 
+    # Register import history service if not already registered
+    if not hass.services.has_service(DOMAIN, SERVICE_IMPORT_HISTORY):
+        async def handle_import_history(call: ServiceCall) -> None:
+            """Service to import historical readings into recorder statistics."""
+            device_group = call.data.get("device_group")
+            coordinators = list(hass.data.get(DOMAIN, {}).values())
+            if not coordinators:
+                _LOGGER.error("No active Ista coordinator found for history import")
+                return
+
+            from .statistics import async_import_ista_statistics
+
+            for coord in coordinators:
+                res = await async_import_ista_statistics(hass, coord, target_group=device_group)
+                _LOGGER.info("Resultado importación histórico Ista: %s", res)
+
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_IMPORT_HISTORY,
+            handle_import_history,
+            schema=SERVICE_IMPORT_SCHEMA,
+        )
+
     return True
 
 
@@ -121,9 +151,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
 
-    # Remove service if no entries remain
+    # Remove services if no entries remain
     if not hass.data.get(DOMAIN):
         hass.services.async_remove(DOMAIN, SERVICE_DOWNLOAD_RECEIPT)
+        hass.services.async_remove(DOMAIN, SERVICE_IMPORT_HISTORY)
 
     return unload_ok
 

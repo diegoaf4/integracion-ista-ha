@@ -13,13 +13,22 @@ Integración personalizada para **Home Assistant** que conecta con la **Oficina 
 - 💧 **Agua Caliente Sanitaria**:
   - Lectura acumulada actual por radiofrecuencia (en **m³**), compatible con el panel de **Agua** del Dashboard de Energía de Home Assistant (`device_class: water`, `state_class: total_increasing`).
   - Último consumo facturado (en **m³**).
-  - Consumo no facturado estimado desde la última factura emitida (en **m³**).
+  - Consumo no facturado en curso (en **m³**).
+  - **Coste estimado no facturado** (en **€**), calculado multiplicando los m³ pendientes por el precio real del agua.
   - Importe de la última factura de agua caliente (en **€**) con enlace directo de descarga del PDF.
 - 🔥 **Calefacción (Optosonic / Repartidores)**:
   - Lectura acumulada actual por radiofrecuencia (en **kWh**), compatible con el Dashboard de **Energía** de Home Assistant (`device_class: energy`, `state_class: total_increasing`).
   - Último consumo facturado (en **kWh**).
-  - Consumo no facturado estimado desde la última factura emitida (en **kWh**).
+  - Consumo no facturado en curso (en **kWh**).
+  - **Coste estimado no facturado** (en **€**), calculado multiplicando la energía pendiente por el precio real por kWh.
   - Importe de la última factura de calefacción (en **€**) con enlace directo de descarga del PDF.
+- 📊 **Importación de Histórico a Estadísticas de Home Assistant (LTS / Energy Dashboard)**:
+  - Importa todas las lecturas pasadas (tanto el histórico mensual como las lecturas diarias de radio) directamente en la base de datos de Home Assistant (`recorder.statistics`).
+  - Permite visualizar en el **Panel de Energía de HA** los consumos de meses o días anteriores desde el primer momento.
+  - Se puede ejecutar con **1 solo clic** desde el botón de la integración o mediante el servicio `ista.import_history`.
+- 💶 **Precios y Tarifas Configurables**:
+  - Cálculo automático del precio unitario (€/m³ y €/kWh) a partir del importe y consumo del último recibo emitido.
+  - Posibilidad de introducir tarifas fijas personalizadas en las opciones de la integración.
 - 🧾 **Facturación y Recibos**:
   - Sensor global de última factura emitida con atributos detallados: fecha, importe, equipo y URL directa para descargar el recibo en PDF.
 - ⚙️ **Configuración sencilla mediante interfaz gráfica (UI)**:
@@ -33,17 +42,20 @@ Integración personalizada para **Home Assistant** que conecta con la **Oficina 
 
 La integración organiza las entidades en dispositivos independientes:
 
-| Dispositivo | Sensor | Entidad sugerida | Unidad | Clase |
+| Dispositivo | Tipo | Entidad | Unidad | Clase |
 |---|---|---|---|---|
-| **Ista Contador Agua Caliente** | Lectura Actual | `sensor.ista_agua_caliente_lectura_actual` | `m³` | `water` (`total_increasing`) |
-| | Último Consumo Facturado | `sensor.ista_agua_caliente_ultimo_consumo` | `m³` | `water` |
-| | Consumo No Facturado | `sensor.ista_agua_caliente_consumo_no_facturado` | `m³` | `water` |
-| | Última Factura | `sensor.ista_agua_caliente_ultima_factura` | `€` | `monetary` |
-| **Ista Contador Calefacción** | Lectura Actual | `sensor.ista_calefaccion_lectura_actual` | `kWh` | `energy` (`total_increasing`) |
-| | Último Consumo Facturado | `sensor.ista_calefaccion_ultimo_consumo` | `kWh` | `energy` |
-| | Consumo No Facturado | `sensor.ista_calefaccion_consumo_no_facturado` | `kWh` | `energy` |
-| | Última Factura | `sensor.ista_calefaccion_ultima_factura` | `€` | `monetary` |
-| **Ista Cuenta (Abonado)** | Última Factura General | `sensor.ista_ultima_factura` | `€` | `monetary` |
+| **Ista Contador Agua Caliente** | Sensor | `sensor.ista_agua_caliente_lectura_actual` | `m³` | `water` (`total_increasing`) |
+| | Sensor | `sensor.ista_agua_caliente_ultimo_consumo` | `m³` | `water` |
+| | Sensor | `sensor.ista_agua_caliente_consumo_no_facturado` | `m³` | `water` |
+| | Sensor | `sensor.ista_agua_caliente_coste_estimado_no_facturado` | `€` | `monetary` |
+| | Sensor | `sensor.ista_agua_caliente_ultima_factura` | `€` | `monetary` |
+| **Ista Contador Calefacción** | Sensor | `sensor.ista_calefaccion_lectura_actual` | `kWh` | `energy` (`total_increasing`) |
+| | Sensor | `sensor.ista_calefaccion_ultimo_consumo` | `kWh` | `energy` |
+| | Sensor | `sensor.ista_calefaccion_consumo_no_facturado` | `kWh` | `energy` |
+| | Sensor | `sensor.ista_calefaccion_coste_estimado_no_facturado` | `€` | `monetary` |
+| | Sensor | `sensor.ista_calefaccion_ultima_factura` | `€` | `monetary` |
+| **Ista Cuenta (Abonado)** | Sensor | `sensor.ista_ultima_factura` | `€` | `monetary` |
+| | Botón | `button.ista_cuenta_xxxxx_importar_historico_de_lecturas` | - | `button` |
 
 ---
 
@@ -114,6 +126,8 @@ entities:
     name: Lectura Contador
   - entity: sensor.ista_agua_caliente_consumo_no_facturado
     name: Consumo en curso (no facturado)
+  - entity: sensor.ista_agua_caliente_coste_estimado_no_facturado
+    name: Coste estimado en curso
   - entity: sensor.ista_agua_caliente_ultimo_consumo
     name: Último mes facturado
   - entity: sensor.ista_agua_caliente_ultima_factura
@@ -124,11 +138,31 @@ entities:
     name: Lectura Contador
   - entity: sensor.ista_calefaccion_consumo_no_facturado
     name: Consumo en curso (no facturado)
+  - entity: sensor.ista_calefaccion_coste_estimado_no_facturado
+    name: Coste estimado en curso
   - entity: sensor.ista_calefaccion_ultimo_consumo
     name: Último mes facturado
   - entity: sensor.ista_calefaccion_ultima_factura
     name: Importe último recibo
 ```
+
+---
+
+## Importación de Histórico de Lecturas (Panel de Energía y Gráficas)
+
+Para alimentar las estadísticas pasadas de Home Assistant con las lecturas que Ista tiene archivadas en su web (tanto el histórico mensual como las lecturas diarias de radio):
+
+### Opción 1: Desde la Interfaz (Botón)
+En el dispositivo **Ista Cuenta (Abonado)** dispones de la entidad:
+- `button.ista_cuenta_xxxxx_importar_historico_de_lecturas`: Pulsa el botón **"Pulsar" / "Press"** para iniciar la importación inmediata.
+
+### Opción 2: Mediante Servicio (`ista.import_history`)
+Puedes ejecutar la acción en **Herramientas para desarrolladores -> Servicios**:
+- **Servicio**: `ista.import_history`
+- **Parámetros**:
+  - `device_group` (opcional): Selecciona `hot_water` (agua caliente) o `heating` (calefacción). Si se omite, importa ambos contadores.
+
+Una vez importado, verás aparecer automáticamente los consumos de los meses pasados en tu **Panel de Energía** y en tarjetas de tipo `statistics-graph`.
 
 ---
 

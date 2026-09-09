@@ -12,11 +12,15 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_DOWNLOAD_INVOICES,
+    CONF_HEATING_PRICE,
+    CONF_HOT_WATER_PRICE,
     CONF_INVOICES_PATH,
     CONF_PASSWORD,
     CONF_SCAN_INTERVAL,
     CONF_USERNAME,
     DEFAULT_DOWNLOAD_INVOICES,
+    DEFAULT_HEATING_PRICE,
+    DEFAULT_HOT_WATER_PRICE,
     DEFAULT_INVOICES_PATH,
     DEFAULT_SCAN_INTERVAL_HOURS,
     DOMAIN,
@@ -193,6 +197,12 @@ class IstaOptionsFlowHandler(config_entries.OptionsFlow):
         current_path = self.config_entry.options.get(
             CONF_INVOICES_PATH, DEFAULT_INVOICES_PATH
         )
+        current_hw_price = self.config_entry.options.get(
+            CONF_HOT_WATER_PRICE, DEFAULT_HOT_WATER_PRICE
+        )
+        current_heating_price = self.config_entry.options.get(
+            CONF_HEATING_PRICE, DEFAULT_HEATING_PRICE
+        )
 
         return self.async_show_form(
             step_id="init",
@@ -215,6 +225,28 @@ class IstaOptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Optional(
                         CONF_INVOICES_PATH, default=current_path
                     ): selector.TextSelector(),
+                    vol.Optional(
+                        CONF_HOT_WATER_PRICE, default=float(current_hw_price)
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0.0,
+                            max=1000.0,
+                            step=0.01,
+                            unit_of_measurement="€/m³",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_HEATING_PRICE, default=float(current_heating_price)
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0.0,
+                            max=1000.0,
+                            step=0.001,
+                            unit_of_measurement="€/kWh",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
                 }
             ),
         )

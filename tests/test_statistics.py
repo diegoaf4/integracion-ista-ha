@@ -1,0 +1,105 @@
+from datetime import datetime, timezone
+import os
+import sys
+import unittest
+
+sys.path.insert(
+    0,
+    os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "custom_components", "ista")
+    ),
+)
+from statistics import extract_historical_datapoints, parse_flexible_date
+
+
+class TestIstaStatistics(unittest.TestCase):
+    """Tests for statistics date parsing, history extraction, and cost calculations."""
+
+    def test_parse_flexible_date_standard(self):
+        """Test parsing of standard date formats."""
+        dt1 = parse_flexible_date("15/03/2026", tz=timezone.utc)
+        self.assertIsNotNone(dt1)
+        self.assertEqual(dt1.year, 2026)
+        self.assertEqual(dt1.month, 3)
+        self.assertEqual(dt1.day, 15)
+
+        dt2 = parse_flexible_date("2026-01-31", tz=timezone.utc)
+        self.assertIsNotNone(dt2)
+        self.assertEqual(dt2.year, 2026)
+        self.assertEqual(dt2.month, 1)
+        self.assertEqual(dt2.day, 31)
+
+    def test_parse_flexible_date_spanish_months(self):
+        """Test parsing of dates with Spanish month names."""
+        dt = parse_flexible_date("Enero 2026", tz=timezone.utc)
+        self.assertIsNotNone(dt)
+        self.assertEqual(dt.year, 2026)
+        self.assertEqual(dt.month, 1)
+
+        dt2 = parse_flexible_date("15 Febrero 2026", tz=timezone.utc)
+        self.assertIsNotNone(dt2)
+        self.assertEqual(dt2.year, 2026)
+        self.assertEqual(dt2.month, 2)
+        self.assertEqual(dt2.day, 15)
+
+    def test_extract_historical_datapoints(self):
+        """Test extraction, sorting, and deduplication of historical readings."""
+        group_data = {
+            "serial": "123456",
+            "unit": "m3",
+            "current_reading": 42.5,
+            "current_reading_date": "20/03/2026",
+            "monthly_history": [
+                {
+                    "date": "31/01/2026",
+                    "previous_reading": 35.0,
+                    "current_reading": 38.0,
+                    "consumption": 3.0,
+                },
+                {
+                    "date": "28/02/2026",
+                    "previous_reading": 38.0,
+                    "current_reading": 40.0,
+                    "consumption": 2.0,
+                },
+            ],
+            "daily_readings": {
+                "01/03/2026": 40.2,
+                "02/03/2026": 40.5,
+                "03/03/2026": 40.8,
+            },
+        }
+
+        datapoints = extract_historical_datapoints(group_data, tz=timezone.utc)
+
+        # Expect chronological order: 31/01, 28/02, 01/03, 02/03, 03/03, 20/03
+        self.assertEqual(len(datapoints), 6)
+
+        readings = [val for _, val in datapoints]
+        self.assertEqual(readings, [38.0, 40.0, 40.2, 40.5, 40.8, 42.5])
+
+        # Verify timestamps are strictly increasing
+        timestamps = [dt for dt, _ in datapoints]
+        self.assertEqual(timestamps, sorted(timestamps))
+
+    def test_estimated_cost_calculation(self):
+        """Test unbilled cost calculation logic."""
+        # Case 1: Automatic from latest invoice
+        unbilled_consumption = 3.5  # m3
+        last_billed_consumption = 5.0  # m3
+        latest_invoice_amount = 75.00  # EUR
+
+        unit_price = round(latest_invoice_amount / last_billed_consumption, 4)
+        estimated_cost = round(unbilled_consumption * unit_price, 2)
+
+        self.assertEqual(unit_price, 15.0)
+        self.assertEqual(estimated_cost, 52.50)
+
+        # Case 2: Configured manual price override
+        manual_price = 18.50
+        manual_cost = round(unbilled_consumption * manual_price, 2)
+        self.assertEqual(manual_cost, 64.75)
+
+
+if __name__ == "__main__":
+    unittest.main()

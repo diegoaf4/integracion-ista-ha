@@ -21,9 +21,13 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    ATTR_CALCULATION_METHOD,
+    ATTR_DAILY_READINGS,
     ATTR_EQUIPMENT_TYPE,
+    ATTR_ESTIMATED_UNBILLED_COST,
     ATTR_LAST_BILLED_DATE,
     ATTR_LAST_BILLED_READING,
+    ATTR_MONTHLY_HISTORY,
     ATTR_PDF_URL,
     ATTR_PREVIOUS_BILLED_READING,
     ATTR_READING_DATE,
@@ -32,6 +36,7 @@ from .const import (
     ATTR_SUBSCRIBER_NAME,
     ATTR_SUBSCRIBER_NUMBER,
     ATTR_UNBILLED_CONSUMPTION,
+    ATTR_UNIT_PRICE,
     DOMAIN,
 )
 from .coordinator import IstaDataUpdateCoordinator
@@ -62,6 +67,7 @@ SENSOR_DESCRIPTIONS: tuple[IstaSensorEntityDescription, ...] = (
         extra_attributes_fn=lambda data: {
             ATTR_READING_DATE: data.get("hot_water", {}).get("current_reading_date"),
             ATTR_SERIAL_NUMBER: data.get("hot_water", {}).get("serial"),
+            ATTR_DAILY_READINGS: data.get("hot_water", {}).get("daily_readings"),
         },
     ),
     IstaSensorEntityDescription(
@@ -79,6 +85,7 @@ SENSOR_DESCRIPTIONS: tuple[IstaSensorEntityDescription, ...] = (
             ATTR_LAST_BILLED_READING: data.get("hot_water", {}).get("last_billed_reading"),
             ATTR_PREVIOUS_BILLED_READING: data.get("hot_water", {}).get("previous_billed_reading"),
             ATTR_SERIAL_NUMBER: data.get("hot_water", {}).get("serial"),
+            ATTR_MONTHLY_HISTORY: data.get("hot_water", {}).get("monthly_history"),
         },
     ),
     IstaSensorEntityDescription(
@@ -94,6 +101,22 @@ SENSOR_DESCRIPTIONS: tuple[IstaSensorEntityDescription, ...] = (
         extra_attributes_fn=lambda data: {
             ATTR_READING_DATE: data.get("hot_water", {}).get("current_reading_date"),
             ATTR_LAST_BILLED_DATE: data.get("hot_water", {}).get("last_billed_date"),
+        },
+    ),
+    IstaSensorEntityDescription(
+        key="hot_water_estimated_unbilled_cost",
+        translation_key="hot_water_estimated_unbilled_cost",
+        name="Agua Caliente Coste Estimado No Facturado",
+        device_group="hot_water",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement="€",
+        suggested_display_precision=2,
+        icon="mdi:cash-clock",
+        value_fn=lambda data: data.get("hot_water", {}).get("estimated_unbilled_cost"),
+        extra_attributes_fn=lambda data: {
+            ATTR_UNIT_PRICE: data.get("hot_water", {}).get("unit_price"),
+            ATTR_CALCULATION_METHOD: data.get("hot_water", {}).get("calculation_method"),
+            ATTR_UNBILLED_CONSUMPTION: data.get("hot_water", {}).get("unbilled_consumption"),
         },
     ),
     IstaSensorEntityDescription(
@@ -128,6 +151,7 @@ SENSOR_DESCRIPTIONS: tuple[IstaSensorEntityDescription, ...] = (
         extra_attributes_fn=lambda data: {
             ATTR_READING_DATE: data.get("heating", {}).get("current_reading_date"),
             ATTR_SERIAL_NUMBER: data.get("heating", {}).get("serial"),
+            ATTR_DAILY_READINGS: data.get("heating", {}).get("daily_readings"),
         },
     ),
     IstaSensorEntityDescription(
@@ -145,6 +169,7 @@ SENSOR_DESCRIPTIONS: tuple[IstaSensorEntityDescription, ...] = (
             ATTR_LAST_BILLED_READING: data.get("heating", {}).get("last_billed_reading"),
             ATTR_PREVIOUS_BILLED_READING: data.get("heating", {}).get("previous_billed_reading"),
             ATTR_SERIAL_NUMBER: data.get("heating", {}).get("serial"),
+            ATTR_MONTHLY_HISTORY: data.get("heating", {}).get("monthly_history"),
         },
     ),
     IstaSensorEntityDescription(
@@ -160,6 +185,22 @@ SENSOR_DESCRIPTIONS: tuple[IstaSensorEntityDescription, ...] = (
         extra_attributes_fn=lambda data: {
             ATTR_READING_DATE: data.get("heating", {}).get("current_reading_date"),
             ATTR_LAST_BILLED_DATE: data.get("heating", {}).get("last_billed_date"),
+        },
+    ),
+    IstaSensorEntityDescription(
+        key="heating_estimated_unbilled_cost",
+        translation_key="heating_estimated_unbilled_cost",
+        name="Calefacción Coste Estimado No Facturado",
+        device_group="heating",
+        device_class=SensorDeviceClass.MONETARY,
+        native_unit_of_measurement="€",
+        suggested_display_precision=2,
+        icon="mdi:cash-clock",
+        value_fn=lambda data: data.get("heating", {}).get("estimated_unbilled_cost"),
+        extra_attributes_fn=lambda data: {
+            ATTR_UNIT_PRICE: data.get("heating", {}).get("unit_price"),
+            ATTR_CALCULATION_METHOD: data.get("heating", {}).get("calculation_method"),
+            ATTR_UNBILLED_CONSUMPTION: data.get("heating", {}).get("unbilled_consumption"),
         },
     ),
     IstaSensorEntityDescription(

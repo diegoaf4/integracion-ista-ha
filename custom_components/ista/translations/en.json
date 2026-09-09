@@ -32,11 +32,13 @@
     "step": {
       "init": {
         "title": "Ista Options",
-        "description": "Adjust how often Home Assistant queries the portal and automatic invoice downloads.",
+        "description": "Adjust update interval, invoice downloads, and energy/water tariffs for unbilled cost estimates.",
         "data": {
           "scan_interval": "Update interval (hours)",
           "download_invoices": "Automatically download new invoice PDFs",
-          "invoices_path": "Local download directory in Home Assistant"
+          "invoices_path": "Local download directory in Home Assistant",
+          "hot_water_price": "Hot water tariff (€/m³, 0 for automatic calculation from latest bill)",
+          "heating_price": "Heating tariff (€/kWh, 0 for automatic calculation from latest bill)"
         }
       }
     }
@@ -52,6 +54,9 @@
       "hot_water_unbilled_consumption": {
         "name": "Hot water unbilled consumption"
       },
+      "hot_water_estimated_unbilled_cost": {
+        "name": "Hot water estimated unbilled cost"
+      },
       "hot_water_latest_receipt": {
         "name": "Hot water latest bill"
       },
@@ -64,11 +69,19 @@
       "heating_unbilled_consumption": {
         "name": "Heating unbilled consumption"
       },
+      "heating_estimated_unbilled_cost": {
+        "name": "Heating estimated unbilled cost"
+      },
       "heating_latest_receipt": {
         "name": "Heating latest bill"
       },
       "latest_receipt_overall": {
         "name": "Latest Ista bill"
+      }
+    },
+    "button": {
+      "import_history": {
+        "name": "Import reading history"
       }
     }
   }

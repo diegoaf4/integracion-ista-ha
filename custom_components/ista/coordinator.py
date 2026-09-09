@@ -14,6 +14,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import (
     CONF_DOWNLOAD_INVOICES,
+    CONF_HEATING_PRICE,
+    CONF_HOT_WATER_PRICE,
     CONF_INVOICES_PATH,
     DEFAULT_DOWNLOAD_INVOICES,
     DEFAULT_INVOICES_PATH,
@@ -81,8 +83,51 @@ class IstaDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
         except Exception as err:
             raise UpdateFailed(f"Unexpected error updating Ista data: {err}") from err
 
+        self._calculate_estimated_unbilled_costs(data)
         await self._process_new_invoices(data)
         return data
+
+    def _calculate_estimated_unbilled_costs(self, data: Dict[str, Any]) -> None:
+        """Calculate estimated cost of unbilled consumption for hot water and heating."""
+        targets = [
+            ("hot_water", CONF_HOT_WATER_PRICE),
+            ("heating", CONF_HEATING_PRICE),
+        ]
+
+        for key, conf_price_key in targets:
+            group_data = data.get(key, {})
+            unbilled = group_data.get("unbilled_consumption")
+
+            custom_price = self.entry.options.get(conf_price_key)
+            if custom_price is not None and float(custom_price) > 0:
+                unit_price = round(float(custom_price), 4)
+                method = "manual_configurado"
+            else:
+                # Estimate unit price from latest invoice amount / last billed consumption
+                latest_receipt = group_data.get("latest_receipt")
+                last_billed_consumption = group_data.get("last_billed_consumption")
+                amount = latest_receipt.get("amount") if isinstance(latest_receipt, dict) else None
+
+                if (
+                    amount is not None
+                    and last_billed_consumption is not None
+                    and float(last_billed_consumption) > 0
+                ):
+                    unit_price = round(float(amount) / float(last_billed_consumption), 4)
+                    method = "automatico_ultima_factura"
+                else:
+                    unit_price = None
+                    method = "desconocido"
+
+            group_data["unit_price"] = unit_price
+            group_data["calculation_method"] = method
+
+            if unbilled is not None and unit_price is not None:
+                estimated_cost = round(float(unbilled) * unit_price, 2)
+                group_data["estimated_unbilled_cost"] = estimated_cost
+            else:
+                group_data["estimated_unbilled_cost"] = None
+
 
     async def _process_new_invoices(self, data: Dict[str, Any]) -> None:
         """Check for newly appeared invoices, download PDF if enabled, and fire event."""

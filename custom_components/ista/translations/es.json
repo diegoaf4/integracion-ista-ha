@@ -32,11 +32,13 @@
     "step": {
       "init": {
         "title": "Opciones de Ista",
-        "description": "Ajusta la frecuencia con la que Home Assistant consulta el portal y la descarga automática de facturas.",
+        "description": "Ajusta la frecuencia de actualización, descarga de facturas y precios para la estimación de costes no facturados.",
         "data": {
           "scan_interval": "Intervalo de actualización (horas)",
           "download_invoices": "Descargar automáticamente nuevas facturas en PDF",
-          "invoices_path": "Carpeta de descarga local en Home Assistant"
+          "invoices_path": "Carpeta de descarga local en Home Assistant",
+          "hot_water_price": "Precio agua caliente (€/m³, 0 para cálculo automático según última factura)",
+          "heating_price": "Precio calefacción (€/kWh, 0 para cálculo automático según última factura)"
         }
       }
     }
@@ -52,6 +54,9 @@
       "hot_water_unbilled_consumption": {
         "name": "Agua caliente consumo no facturado"
       },
+      "hot_water_estimated_unbilled_cost": {
+        "name": "Agua caliente coste estimado no facturado"
+      },
       "hot_water_latest_receipt": {
         "name": "Agua caliente última factura"
       },
@@ -64,11 +69,19 @@
       "heating_unbilled_consumption": {
         "name": "Calefacción consumo no facturado"
       },
+      "heating_estimated_unbilled_cost": {
+        "name": "Calefacción coste estimado no facturado"
+      },
       "heating_latest_receipt": {
         "name": "Calefacción última factura"
       },
       "latest_receipt_overall": {
         "name": "Última factura Ista"
+      }
+    },
+    "button": {
+      "import_history": {
+        "name": "Importar histórico de lecturas"
       }
     }
   }

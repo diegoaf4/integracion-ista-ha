@@ -14,3 +14,20 @@ download_receipt:
       example: "/config/www/ista_facturas/mi_factura.pdf"
       selector:
         text:
+
+import_history:
+  name: Importar histórico de lecturas Ista
+  description: Importa las lecturas acumuladas históricas (mensuales y diarias por radio) desde la web de Ista a las estadísticas a largo plazo (LTS) de Home Assistant.
+  fields:
+    device_group:
+      name: Servicio / Contador
+      description: Filtrar por tipo de contador a importar (opcional, por defecto importa tanto agua caliente como calefacción).
+      example: "hot_water"
+      selector:
+        select:
+          options:
+            - label: Agua Caliente
+              value: hot_water
+            - label: Calefacción
+              value: heating
+
