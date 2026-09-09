@@ -65,7 +65,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(update_listener))
 
     # Register download service if not already registered
-    if not hass.services.has(DOMAIN, SERVICE_DOWNLOAD_RECEIPT):
+    if not hass.services.has_service(DOMAIN, SERVICE_DOWNLOAD_RECEIPT):
         async def handle_download_receipt(call: ServiceCall) -> None:
             """Service to download a receipt PDF on demand."""
             receipt_id = call.data.get("receipt_id")
