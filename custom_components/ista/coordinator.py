@@ -128,6 +128,25 @@ class IstaDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
             else:
                 group_data["estimated_unbilled_cost"] = None
 
+        # Calculate cumulative total billed cost and count per service
+        for key, filter_terms in (
+            ("hot_water", ("agua", "acs")),
+            ("heating", ("optosonic", "calefacc", "calor")),
+        ):
+            total_sum = 0.0
+            count = 0
+            for r in data.get("receipts", []):
+                amt = r.get("amount")
+                if amt and float(amt) > 0:
+                    t = r.get("type", "").lower()
+                    if any(term in t for term in filter_terms):
+                        total_sum += float(amt)
+                        count += 1
+
+            target = data.setdefault(key, {})
+            target["total_billed_cost"] = round(total_sum, 2) if count > 0 else None
+            target["bills_count"] = count
+
 
     async def _process_new_invoices(self, data: Dict[str, Any]) -> None:
         """Check for newly appeared invoices, download PDF if enabled, and fire event."""

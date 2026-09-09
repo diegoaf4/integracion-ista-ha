@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 import requests
 from bs4 import BeautifulSoup
 
@@ -317,3 +317,78 @@ class IstaClient:
                             data[key]["unbilled_consumption"] = round(unbilled, 3)
 
         return data
+
+    def fetch_all_receipts(self, max_pages: int = 50) -> List[Dict[str, Any]]:
+        """Fetch all historical receipt entries across all available pages in the portal."""
+        self.login()
+        all_receipts: List[Dict[str, Any]] = []
+        seen_ids: Set[str] = set()
+        page = 1
+
+        while page <= max_pages:
+            url = (
+                f"{self.BASE_URL}/GesCon/GestionFacturacion.do"
+                f"?d-148657-p={page}&metodo=listadoRecibos"
+            )
+            try:
+                r = self.session.get(url, timeout=30)
+                r.raise_for_status()
+            except requests.RequestException as err:
+                _LOGGER.warning("Error fetching receipts page %d: %s", page, err)
+                break
+
+            soup = BeautifulSoup(r.text, "html.parser")
+            table = soup.find("table", {"id": "lista"})
+            if not table:
+                break
+
+            rows = table.find_all("tr")[1:]
+            if not rows:
+                break
+
+            page_new_count = 0
+            for tr in rows:
+                cells = [c.get_text(strip=True) for c in tr.find_all(["th", "td"])]
+                if len(cells) < 3 or cells[0] == "No se han encontrado resultados":
+                    continue
+
+                date_str = cells[0]
+                equipment_type = cells[1]
+                amount_str = cells[2]
+                amount = self.parse_number(amount_str)
+
+                pdf_link = ""
+                receipt_id = ""
+                link_elem = tr.find(
+                    "a", href=re.compile(r"duplicarReciboIndividualCalista")
+                )
+                if link_elem:
+                    href = link_elem.get("href", "")
+                    pdf_link = (
+                        f"{self.BASE_URL}{href}"
+                        if href.startswith("/")
+                        else href
+                    )
+                    m = re.search(r"idRecibo=([^&]+)", href)
+                    if m:
+                        receipt_id = m.group(1)
+
+                if not receipt_id or receipt_id in seen_ids:
+                    continue
+
+                seen_ids.add(receipt_id)
+                page_new_count += 1
+                all_receipts.append({
+                    "date": date_str,
+                    "type": equipment_type,
+                    "amount": amount,
+                    "pdf_url": pdf_link,
+                    "receipt_id": receipt_id,
+                })
+
+            if page_new_count == 0:
+                break
+            page += 1
+
+        return all_receipts
+

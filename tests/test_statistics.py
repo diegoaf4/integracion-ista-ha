@@ -9,7 +9,11 @@ sys.path.insert(
         os.path.join(os.path.dirname(__file__), "..", "custom_components", "ista")
     ),
 )
-from statistics import extract_historical_datapoints, parse_flexible_date
+from statistics import (
+    extract_historical_cost_datapoints,
+    extract_historical_datapoints,
+    parse_flexible_date,
+)
 
 
 class TestIstaStatistics(unittest.TestCase):
@@ -100,6 +104,34 @@ class TestIstaStatistics(unittest.TestCase):
         manual_cost = round(unbilled_consumption * manual_price, 2)
         self.assertEqual(manual_cost, 64.75)
 
+    def test_extract_historical_cost_datapoints(self):
+        """Test historical invoice cost extraction and cumulative sum calculation."""
+        receipts = [
+            {"date": "10/03/2026", "type": "Agua caliente", "amount": 30.00, "receipt_id": "r3"},
+            {"date": "10/01/2026", "type": "Agua caliente", "amount": 25.50, "receipt_id": "r1"},
+            {"date": "10/02/2026", "type": "Agua caliente", "amount": 20.00, "receipt_id": "r2"},
+            {"date": "10/01/2026", "type": "Optosonic", "amount": 60.00, "receipt_id": "r4"},
+            {"date": "10/02/2026", "type": "Calefacción", "amount": 80.00, "receipt_id": "r5"},
+        ]
+
+        # Hot water cost series
+        hw_series = extract_historical_cost_datapoints(receipts, "hot_water", tz=timezone.utc)
+        self.assertEqual(len(hw_series), 3)
+
+        # Chronological order: 10/01 (25.50), 10/02 (20.00 -> cum 45.50), 10/03 (30.00 -> cum 75.50)
+        amounts = [amt for _, amt, _ in hw_series]
+        cumulative = [cum for _, _, cum in hw_series]
+
+        self.assertEqual(amounts, [25.50, 20.00, 30.00])
+        self.assertEqual(cumulative, [25.50, 45.50, 75.50])
+
+        # Heating cost series
+        heating_series = extract_historical_cost_datapoints(receipts, "heating", tz=timezone.utc)
+        self.assertEqual(len(heating_series), 2)
+        heating_cum = [cum for _, _, cum in heating_series]
+        self.assertEqual(heating_cum, [60.00, 140.00])
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -57,6 +57,9 @@
       "hot_water_estimated_unbilled_cost": {
         "name": "Agua caliente coste estimado no facturado"
       },
+      "hot_water_total_cost": {
+        "name": "Agua caliente coste total facturado"
+      },
       "hot_water_latest_receipt": {
         "name": "Agua caliente última factura"
       },
@@ -71,6 +74,9 @@
       },
       "heating_estimated_unbilled_cost": {
         "name": "Calefacción coste estimado no facturado"
+      },
+      "heating_total_cost": {
+        "name": "Calefacción coste total facturado"
       },
       "heating_latest_receipt": {
         "name": "Calefacción última factura"

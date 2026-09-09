@@ -48,11 +48,13 @@ La integración organiza las entidades en dispositivos independientes:
 | | Sensor | `sensor.ista_agua_caliente_ultimo_consumo` | `m³` | `water` |
 | | Sensor | `sensor.ista_agua_caliente_consumo_no_facturado` | `m³` | `water` |
 | | Sensor | `sensor.ista_agua_caliente_coste_estimado_no_facturado` | `€` | `monetary` |
+| | Sensor | `sensor.ista_agua_caliente_coste_total` | `€` | `monetary` (`total_increasing`) |
 | | Sensor | `sensor.ista_agua_caliente_ultima_factura` | `€` | `monetary` |
 | **Ista Contador Calefacción** | Sensor | `sensor.ista_calefaccion_lectura_actual` | `kWh` | `energy` (`total_increasing`) |
 | | Sensor | `sensor.ista_calefaccion_ultimo_consumo` | `kWh` | `energy` |
 | | Sensor | `sensor.ista_calefaccion_consumo_no_facturado` | `kWh` | `energy` |
 | | Sensor | `sensor.ista_calefaccion_coste_estimado_no_facturado` | `€` | `monetary` |
+| | Sensor | `sensor.ista_calefaccion_coste_total` | `€` | `monetary` (`total_increasing`) |
 | | Sensor | `sensor.ista_calefaccion_ultima_factura` | `€` | `monetary` |
 | **Ista Cuenta (Abonado)** | Sensor | `sensor.ista_ultima_factura` | `€` | `monetary` |
 | | Botón | `button.ista_cuenta_xxxxx_importar_historico_de_lecturas` | - | `button` |
@@ -101,13 +103,15 @@ La integración organiza las entidades en dispositivos independientes:
 
 Los sensores de lectura acumulada están listos para ser utilizados directamente en el panel nativo de Energía de Home Assistant:
 
-### Consumo de Agua:
+### Consumo de Agua (Volumen y Coste):
 1. Ve a **Ajustes** -> **Paneles de control** -> **Energía**.
 2. En la sección **Consumo de agua**, pulsa en **Añadir fuente de agua**.
-3. Selecciona: `sensor.ista_agua_caliente_lectura_actual`.
+3. Selecciona el sensor de consumo: `sensor.ista_agua_caliente_lectura_actual`.
+4. En el apartado de coste, selecciona **"Usar una entidad con el coste total"** y elige: `sensor.ista_agua_caliente_coste_total`.
 
-### Consumo de Calefacción / Gas / Electricidad:
-1. En la misma sección de **Energía**, puedes añadir `sensor.ista_calefaccion_lectura_actual` como consumo de red eléctrica individual o en la sección de gas si utilizas conversión.
+### Consumo de Calefacción (Energía y Coste):
+1. En la misma sección de **Energía**, puedes añadir `sensor.ista_calefaccion_lectura_actual` en la sección de dispositivos individuales o en fuentes de gas.
+2. Como entidad de coste asociado, selecciona: `sensor.ista_calefaccion_coste_total`.
 
 ---
 
@@ -148,9 +152,11 @@ entities:
 
 ---
 
-## Importación de Histórico de Lecturas (Panel de Energía y Gráficas)
+## Importación de Histórico de Lecturas y Coste de Facturas (Panel de Energía y Gráficas)
 
-Para alimentar las estadísticas pasadas de Home Assistant con las lecturas que Ista tiene archivadas en su web (tanto el histórico mensual como las lecturas diarias de radio):
+Para alimentar las estadísticas pasadas de Home Assistant con las lecturas y facturas que Ista tiene archivadas en su web:
+- **Consumos físicos pasados:** Importa las lecturas acumuladas históricas ($m^3$ y $kWh$) tanto mensuales como de telemedida diaria por radio.
+- **Coste de facturas pasadas:** Recorre la paginación completa de la oficina virtual de Ista para importar el importe en euros (€) de **todas tus facturas históricas**, asociándolas al coste mensual en el Panel de Energía.
 
 ### Opción 1: Desde la Interfaz (Botón)
 En el dispositivo **Ista Cuenta (Abonado)** dispones de la entidad:
@@ -160,9 +166,9 @@ En el dispositivo **Ista Cuenta (Abonado)** dispones de la entidad:
 Puedes ejecutar la acción en **Herramientas para desarrolladores -> Servicios**:
 - **Servicio**: `ista.import_history`
 - **Parámetros**:
-  - `device_group` (opcional): Selecciona `hot_water` (agua caliente) o `heating` (calefacción). Si se omite, importa ambos contadores.
+  - `device_group` (opcional): Selecciona `hot_water` (agua caliente) o `heating` (calefacción). Si se omite, importa ambos contadores tanto de consumo como de coste.
 
-Una vez importado, verás aparecer automáticamente los consumos de los meses pasados en tu **Panel de Energía** y en tarjetas de tipo `statistics-graph`.
+Una vez importado, verás aparecer automáticamente los consumos y costes en euros de los meses pasados en tu **Panel de Energía** y en tarjetas de tipo `statistics-graph`.
 
 ---
 

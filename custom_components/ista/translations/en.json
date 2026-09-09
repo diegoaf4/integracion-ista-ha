@@ -57,6 +57,9 @@
       "hot_water_estimated_unbilled_cost": {
         "name": "Hot water estimated unbilled cost"
       },
+      "hot_water_total_cost": {
+        "name": "Hot water total billed cost"
+      },
       "hot_water_latest_receipt": {
         "name": "Hot water latest bill"
       },
@@ -71,6 +74,9 @@
       },
       "heating_estimated_unbilled_cost": {
         "name": "Heating estimated unbilled cost"
+      },
+      "heating_total_cost": {
+        "name": "Heating total billed cost"
       },
       "heating_latest_receipt": {
         "name": "Heating latest bill"

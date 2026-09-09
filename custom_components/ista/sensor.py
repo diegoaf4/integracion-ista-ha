@@ -21,6 +21,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    ATTR_BILLS_COUNT,
     ATTR_CALCULATION_METHOD,
     ATTR_DAILY_READINGS,
     ATTR_EQUIPMENT_TYPE,
@@ -35,6 +36,7 @@ from .const import (
     ATTR_SERIAL_NUMBER,
     ATTR_SUBSCRIBER_NAME,
     ATTR_SUBSCRIBER_NUMBER,
+    ATTR_TOTAL_BILLED_COST,
     ATTR_UNBILLED_CONSUMPTION,
     ATTR_UNIT_PRICE,
     DOMAIN,
@@ -120,6 +122,21 @@ SENSOR_DESCRIPTIONS: tuple[IstaSensorEntityDescription, ...] = (
         },
     ),
     IstaSensorEntityDescription(
+        key="hot_water_total_cost",
+        translation_key="hot_water_total_cost",
+        name="Agua Caliente Coste Total Facturado",
+        device_group="hot_water",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement="€",
+        suggested_display_precision=2,
+        icon="mdi:cash-check",
+        value_fn=lambda data: data.get("hot_water", {}).get("total_billed_cost"),
+        extra_attributes_fn=lambda data: {
+            ATTR_BILLS_COUNT: data.get("hot_water", {}).get("bills_count"),
+        },
+    ),
+    IstaSensorEntityDescription(
         key="hot_water_latest_receipt",
         translation_key="hot_water_latest_receipt",
         name="Agua Caliente Última Factura",
@@ -201,6 +218,21 @@ SENSOR_DESCRIPTIONS: tuple[IstaSensorEntityDescription, ...] = (
             ATTR_UNIT_PRICE: data.get("heating", {}).get("unit_price"),
             ATTR_CALCULATION_METHOD: data.get("heating", {}).get("calculation_method"),
             ATTR_UNBILLED_CONSUMPTION: data.get("heating", {}).get("unbilled_consumption"),
+        },
+    ),
+    IstaSensorEntityDescription(
+        key="heating_total_cost",
+        translation_key="heating_total_cost",
+        name="Calefacción Coste Total Facturado",
+        device_group="heating",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement="€",
+        suggested_display_precision=2,
+        icon="mdi:cash-check",
+        value_fn=lambda data: data.get("heating", {}).get("total_billed_cost"),
+        extra_attributes_fn=lambda data: {
+            ATTR_BILLS_COUNT: data.get("heating", {}).get("bills_count"),
         },
     ),
     IstaSensorEntityDescription(

@@ -197,12 +197,56 @@ def extract_historical_datapoints(
     return cleaned_series
 
 
+def extract_historical_cost_datapoints(
+    receipts: List[Dict[str, Any]], target_group: str, tz=None
+) -> List[Tuple[datetime, float, float]]:
+    """Extract and combine historical invoice amounts into a cumulative cost series.
+
+    Returns: List of (dt, invoice_amount, cumulative_sum).
+    """
+    filtered_items: List[Tuple[datetime, float]] = []
+
+    for r in receipts:
+        if not isinstance(r, dict):
+            continue
+        rec_type = r.get("type", "").lower()
+        if target_group == "hot_water":
+            if not any(k in rec_type for k in ("agua", "acs")):
+                continue
+        elif target_group == "heating":
+            if not any(k in rec_type for k in ("optosonic", "calefacc", "calor")):
+                continue
+
+        amount = r.get("amount")
+        date_str = r.get("date")
+        if amount is not None and float(amount) > 0 and date_str:
+            dt = parse_flexible_date(date_str, tz=tz)
+            if dt:
+                filtered_items.append((dt, float(amount)))
+
+    if not filtered_items:
+        return []
+
+    # Sort chronologically by date ascending
+    sorted_items = sorted(filtered_items, key=lambda item: item[0])
+
+    # Calculate cumulative sum
+    series: List[Tuple[datetime, float, float]] = []
+    accumulated = 0.0
+
+    for dt, amount in sorted_items:
+        accumulated += amount
+        series.append((dt, round(amount, 2), round(accumulated, 2)))
+
+    return series
+
+
 async def async_import_ista_statistics(
     hass: HomeAssistant,
     coordinator: IstaDataUpdateCoordinator,
     target_group: Optional[str] = None,
 ) -> Dict[str, int]:
-    """Import historical readings from Ista into Home Assistant recorder statistics."""
+    """Import historical readings and invoice costs from Ista into Home Assistant recorder statistics."""
     if "recorder" not in hass.config.components:
         _LOGGER.warning("El componente 'recorder' no está disponible. No se pueden importar estadísticas.")
         return {}
@@ -226,6 +270,16 @@ async def async_import_ista_statistics(
     tz = dt_util.get_time_zone(hass.config.time_zone)
     results: Dict[str, int] = {}
 
+    # 1. Fetch all historical receipts across all pages if possible
+    try:
+        all_receipts = await hass.async_add_executor_job(coordinator.client.fetch_all_receipts)
+        if all_receipts:
+            coordinator.data["receipts"] = all_receipts
+    except Exception as err:
+        _LOGGER.warning("No se pudo obtener la paginación completa de facturas, usando recibos en caché: %s", err)
+        all_receipts = coordinator.data.get("receipts", [])
+
+    # 2. Import consumption physical readings (m³ and kWh)
     targets = []
     if target_group in ("hot_water", None):
         targets.append(
@@ -305,4 +359,74 @@ async def async_import_ista_statistics(
             )
             results[group_key] = 0
 
+    # 3. Import invoice cost statistics (€)
+    cost_targets = []
+    if target_group in ("hot_water", None):
+        cost_targets.append(
+            (
+                "hot_water",
+                "hot_water_total_cost",
+                "€",
+                "Agua Caliente Coste Facturado Acumulado",
+            )
+        )
+    if target_group in ("heating", None):
+        cost_targets.append(
+            (
+                "heating",
+                "heating_total_cost",
+                "€",
+                "Calefacción Coste Facturado Acumulado",
+            )
+        )
+
+    for group_key, sensor_key, unit, default_name in cost_targets:
+        cost_datapoints = extract_historical_cost_datapoints(all_receipts, group_key, tz=tz)
+        if not cost_datapoints:
+            _LOGGER.info("No se encontraron facturas históricas para el coste de %s", group_key)
+            continue
+
+        unique_id = f"{subscriber}_{sensor_key}"
+        entity_id = ent_reg.async_get_entity_id("sensor", DOMAIN, unique_id)
+        if not entity_id:
+            _LOGGER.warning("No se encontró la entidad de coste %s (%s) en el registro", sensor_key, unique_id)
+            continue
+
+        cost_stats: List[StatisticData] = []
+        for dt, amount, cumulative_cost in cost_datapoints:
+            dt_utc = dt_util.as_utc(dt)
+            cost_stats.append(
+                StatisticData(
+                    start=dt_utc,
+                    state=cumulative_cost,
+                    sum=cumulative_cost,
+                )
+            )
+
+        metadata = StatisticMetaData(
+            has_mean=False,
+            has_sum=True,
+            name=None,
+            source="recorder",
+            statistic_id=entity_id,
+            unit_of_measurement=unit,
+        )
+
+        try:
+            async_import_statistics(hass, metadata, cost_stats)
+            _LOGGER.info(
+                "Importadas con éxito %d facturas históricas en la estadística de coste de %s (%s)",
+                len(cost_stats),
+                entity_id,
+                group_key,
+            )
+            results[f"{group_key}_cost"] = len(cost_stats)
+        except Exception as err:
+            _LOGGER.error(
+                "Error al importar estadísticas de coste para %s: %s",
+                entity_id,
+                err,
+            )
+
     return results
+
