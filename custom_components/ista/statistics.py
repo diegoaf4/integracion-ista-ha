@@ -399,6 +399,17 @@ async def async_import_ista_statistics(
 
         metadata = StatisticMetaData(**metadata_kwargs)
 
+        now_utc = dt_util.utcnow()
+        current_hour = now_utc.replace(minute=0, second=0, microsecond=0)
+        if stats and stats[-1]["start"] < current_hour:
+            stats.append(
+                StatisticData(
+                    start=current_hour,
+                    state=stats[-1]["state"],
+                    sum=stats[-1]["sum"],
+                )
+            )
+
         try:
             async_import_statistics(hass, metadata, stats)
             _LOGGER.info(
@@ -408,6 +419,22 @@ async def async_import_ista_statistics(
                 group_key,
             )
             results[group_key] = len(stats)
+
+            if stats:
+                try:
+                    from homeassistant.components.recorder import get_instance
+                    from homeassistant.components.recorder.db_schema import StatisticsShortTerm
+                    rec = get_instance(hass)
+                    minute = (now_utc.minute // 5) * 5
+                    short_start = now_utc.replace(minute=minute, second=0, microsecond=0)
+                    short_stat = StatisticData(
+                        start=short_start,
+                        state=stats[-1]["state"],
+                        sum=stats[-1]["sum"],
+                    )
+                    rec.async_import_statistics(metadata, [short_stat], StatisticsShortTerm)
+                except Exception as seed_err:
+                    _LOGGER.debug("No se pudo sembrar StatisticsShortTerm para %s: %s", entity_id, seed_err)
         except Exception as err:
             _LOGGER.error(
                 "Error al importar estadísticas históricas para %s: %s",
@@ -480,6 +507,17 @@ async def async_import_ista_statistics(
 
         metadata = StatisticMetaData(**cost_metadata_kwargs)
 
+        now_utc = dt_util.utcnow()
+        current_hour = now_utc.replace(minute=0, second=0, microsecond=0)
+        if cost_stats and cost_stats[-1]["start"] < current_hour:
+            cost_stats.append(
+                StatisticData(
+                    start=current_hour,
+                    state=cost_stats[-1]["state"],
+                    sum=cost_stats[-1]["sum"],
+                )
+            )
+
         try:
             async_import_statistics(hass, metadata, cost_stats)
             _LOGGER.info(
@@ -489,6 +527,22 @@ async def async_import_ista_statistics(
                 group_key,
             )
             results[f"{group_key}_cost"] = len(cost_stats)
+
+            if cost_stats:
+                try:
+                    from homeassistant.components.recorder import get_instance
+                    from homeassistant.components.recorder.db_schema import StatisticsShortTerm
+                    rec = get_instance(hass)
+                    minute = (now_utc.minute // 5) * 5
+                    short_start = now_utc.replace(minute=minute, second=0, microsecond=0)
+                    short_stat = StatisticData(
+                        start=short_start,
+                        state=cost_stats[-1]["state"],
+                        sum=cost_stats[-1]["sum"],
+                    )
+                    rec.async_import_statistics(metadata, [short_stat], StatisticsShortTerm)
+                except Exception as seed_err:
+                    _LOGGER.debug("No se pudo sembrar StatisticsShortTerm para coste de %s: %s", entity_id, seed_err)
         except Exception as err:
             _LOGGER.error(
                 "Error al importar estadísticas de coste para %s: %s",
