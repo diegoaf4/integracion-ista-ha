@@ -363,12 +363,15 @@ class IstaSensorEntity(CoordinatorEntity[IstaDataUpdateCoordinator], SensorEntit
                 from homeassistant.helpers import device_registry as dr
                 dev_reg = dr.async_get(self.hass)
                 ident = (DOMAIN, f"{subscriber}_account")
-                if hasattr(dev_reg, "async_get_device_by_identifier"):
-                    account_dev = dev_reg.async_get_device_by_identifier(ident)
-                else:
-                    account_dev = dev_reg.async_get_device(identifiers={ident})
-                if account_dev:
-                    account_dev_id = account_dev.id
+                try:
+                    if hasattr(dev_reg, "async_get_device_by_identifier"):
+                        account_dev = dev_reg.async_get_device_by_identifier(ident, self._entry.entry_id)
+                    else:
+                        account_dev = dev_reg.async_get_device(identifiers={ident})
+                    if account_dev:
+                        account_dev_id = account_dev.id
+                except Exception:
+                    account_dev_id = None
 
             if group == "hot_water":
                 hw_serial = data.get("hot_water", {}).get("serial") or "AguaCaliente"
