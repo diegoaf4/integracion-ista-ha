@@ -40,6 +40,7 @@ SERVICE_DOWNLOAD_SCHEMA = vol.Schema(
 SERVICE_IMPORT_SCHEMA = vol.Schema(
     {
         vol.Optional("device_group"): vol.In(["hot_water", "heating"]),
+        vol.Optional("clear_existing", default=True): cv.boolean,
     }
 )
 
@@ -124,6 +125,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async def handle_import_history(call: ServiceCall) -> None:
             """Service to import historical readings into recorder statistics."""
             device_group = call.data.get("device_group")
+            clear_existing = call.data.get("clear_existing", True)
             coordinators = list(hass.data.get(DOMAIN, {}).values())
             if not coordinators:
                 _LOGGER.error("No active Ista coordinator found for history import")
@@ -132,7 +134,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             from .statistics import async_import_ista_statistics
 
             for coord in coordinators:
-                res = await async_import_ista_statistics(hass, coord, target_group=device_group)
+                res = await async_import_ista_statistics(
+                    hass, coord, target_group=device_group, clear_existing=clear_existing
+                )
                 _LOGGER.info("Resultado importación histórico Ista: %s", res)
 
         hass.services.async_register(

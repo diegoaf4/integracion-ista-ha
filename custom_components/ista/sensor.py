@@ -127,7 +127,7 @@ SENSOR_DESCRIPTIONS: tuple[IstaSensorEntityDescription, ...] = (
         name="Agua Caliente Coste Total Facturado",
         device_group="hot_water",
         device_class=SensorDeviceClass.MONETARY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement="€",
         suggested_display_precision=2,
         icon="mdi:cash-check",
@@ -226,7 +226,7 @@ SENSOR_DESCRIPTIONS: tuple[IstaSensorEntityDescription, ...] = (
         name="Calefacción Coste Total Facturado",
         device_group="heating",
         device_class=SensorDeviceClass.MONETARY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement="€",
         suggested_display_precision=2,
         icon="mdi:cash-check",
@@ -261,23 +261,33 @@ SENSOR_DESCRIPTIONS: tuple[IstaSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement="€",
         suggested_display_precision=2,
-        icon="mdi:receipt-text",
-        value_fn=lambda data: data.get("receipts", [{}])[0].get("amount")
-        if data.get("receipts")
-        else None,
+        icon="mdi:file-document-outline",
+        value_fn=lambda data: (
+            data.get("receipts", [])[0].get("amount")
+            if data.get("receipts")
+            else None
+        ),
         extra_attributes_fn=lambda data: {
-            ATTR_LAST_BILLED_DATE: data.get("receipts", [{}])[0].get("date")
-            if data.get("receipts")
-            else None,
-            ATTR_EQUIPMENT_TYPE: data.get("receipts", [{}])[0].get("type")
-            if data.get("receipts")
-            else None,
-            ATTR_PDF_URL: data.get("receipts", [{}])[0].get("pdf_url")
-            if data.get("receipts")
-            else None,
-            ATTR_RECEIPT_ID: data.get("receipts", [{}])[0].get("receipt_id")
-            if data.get("receipts")
-            else None,
+            ATTR_LAST_BILLED_DATE: (
+                data.get("receipts", [])[0].get("date")
+                if data.get("receipts")
+                else None
+            ),
+            ATTR_PDF_URL: (
+                data.get("receipts", [])[0].get("pdf_url")
+                if data.get("receipts")
+                else None
+            ),
+            ATTR_RECEIPT_ID: (
+                data.get("receipts", [])[0].get("receipt_id")
+                if data.get("receipts")
+                else None
+            ),
+            ATTR_EQUIPMENT_TYPE: (
+                data.get("receipts", [])[0].get("type")
+                if data.get("receipts")
+                else None
+            ),
             ATTR_SUBSCRIBER_NUMBER: data.get("account", {}).get("subscriber_number"),
             ATTR_SUBSCRIBER_NAME: data.get("account", {}).get("name"),
         },
@@ -347,25 +357,43 @@ class IstaSensorEntity(CoordinatorEntity[IstaDataUpdateCoordinator], SensorEntit
 
         group = self.entity_description.device_group
 
-        if group == "hot_water":
-            hw_serial = data.get("hot_water", {}).get("serial") or "AguaCaliente"
-            return DeviceInfo(
-                identifiers={(DOMAIN, f"{subscriber}_hw_{hw_serial}")},
-                name=f"Ista Contador Agua Caliente ({hw_serial})",
-                manufacturer="Ista",
-                model="Radio agua caliente",
-                via_device=(DOMAIN, f"{subscriber}_account"),
-            )
+        if group in ("hot_water", "heating"):
+            account_dev_id = None
+            if self.hass:
+                from homeassistant.helpers import device_registry as dr
+                dev_reg = dr.async_get(self.hass)
+                account_dev = dev_reg.async_get_device(
+                    identifiers={(DOMAIN, f"{subscriber}_account")}
+                )
+                if account_dev:
+                    account_dev_id = account_dev.id
 
-        if group == "heating":
+            if group == "hot_water":
+                hw_serial = data.get("hot_water", {}).get("serial") or "AguaCaliente"
+                device_args: Dict[str, Any] = {
+                    "identifiers": {(DOMAIN, f"{subscriber}_hw_{hw_serial}")},
+                    "name": f"Ista Contador Agua Caliente ({hw_serial})",
+                    "manufacturer": "Ista",
+                    "model": "Radio agua caliente",
+                }
+                if account_dev_id:
+                    device_args["via_device_id"] = account_dev_id
+                else:
+                    device_args["via_device"] = (DOMAIN, f"{subscriber}_account")
+                return DeviceInfo(**device_args)
+
             heat_serial = data.get("heating", {}).get("serial") or "Calefaccion"
-            return DeviceInfo(
-                identifiers={(DOMAIN, f"{subscriber}_heat_{heat_serial}")},
-                name=f"Ista Contador Calefacción ({heat_serial})",
-                manufacturer="Ista",
-                model="Optosonic",
-                via_device=(DOMAIN, f"{subscriber}_account"),
-            )
+            device_args = {
+                "identifiers": {(DOMAIN, f"{subscriber}_heat_{heat_serial}")},
+                "name": f"Ista Contador Calefacción ({heat_serial})",
+                "manufacturer": "Ista",
+                "model": "Optosonic",
+            }
+            if account_dev_id:
+                device_args["via_device_id"] = account_dev_id
+            else:
+                device_args["via_device"] = (DOMAIN, f"{subscriber}_account")
+            return DeviceInfo(**device_args)
 
         # Account device
         return DeviceInfo(

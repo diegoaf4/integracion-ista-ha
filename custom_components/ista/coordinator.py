@@ -58,22 +58,41 @@ class IstaDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
         self.client = client
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}_invoices")
         self._seen_receipt_ids: Set[str] = set()
+        self._all_receipts: List[Dict[str, Any]] = []
         self._store_loaded: bool = False
 
     async def _async_load_seen_receipts(self) -> None:
-        """Load list of already seen/downloaded receipt IDs from persistent store."""
+        """Load list of already seen/downloaded receipt IDs and historical receipts from persistent store."""
         if not self._store_loaded:
             stored_data = await self._store.async_load()
             if stored_data and isinstance(stored_data, dict):
                 self._seen_receipt_ids = set(stored_data.get("seen_receipt_ids", []))
+                self._all_receipts = stored_data.get("all_receipts", [])
             self._store_loaded = True
 
     async def _async_save_seen_receipts(self) -> None:
-        """Save list of seen receipt IDs to persistent store."""
-        await self._store.async_save({"seen_receipt_ids": list(self._seen_receipt_ids)})
+        """Save list of seen receipt IDs and historical receipts to persistent store."""
+        await self._store.async_save({
+            "seen_receipt_ids": list(self._seen_receipt_ids),
+            "all_receipts": self._all_receipts,
+        })
+
+    async def async_update_all_receipts(self, receipts: List[Dict[str, Any]]) -> None:
+        """Update historical receipts list, persist, and recalculate total costs."""
+        await self._async_load_seen_receipts()
+        self._all_receipts = receipts
+        for r in receipts:
+            rec_id = r.get("receipt_id")
+            if rec_id:
+                self._seen_receipt_ids.add(rec_id)
+        await self._async_save_seen_receipts()
+        if self.data:
+            self._calculate_estimated_unbilled_costs(self.data)
+            self.async_set_updated_data(self.data)
 
     async def _async_update_data(self) -> Dict[str, Any]:
         """Fetch data from Ista portal via executor and check for new invoices."""
+        await self._async_load_seen_receipts()
         try:
             data = await self.hass.async_add_executor_job(self.client.fetch_data)
         except IstaAuthError as err:
@@ -128,14 +147,15 @@ class IstaDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
             else:
                 group_data["estimated_unbilled_cost"] = None
 
-        # Calculate cumulative total billed cost and count per service
+        # Calculate cumulative total billed cost and count per service across all known receipts
+        receipts_pool = self._all_receipts if self._all_receipts else data.get("receipts", [])
         for key, filter_terms in (
             ("hot_water", ("agua", "acs")),
             ("heating", ("optosonic", "calefacc", "calor")),
         ):
             total_sum = 0.0
             count = 0
-            for r in data.get("receipts", []):
+            for r in receipts_pool:
                 amt = r.get("amount")
                 if amt and float(amt) > 0:
                     t = r.get("type", "").lower()
@@ -162,6 +182,8 @@ class IstaDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
                 rec_id = r.get("receipt_id")
                 if rec_id:
                     self._seen_receipt_ids.add(rec_id)
+            if not self._all_receipts:
+                self._all_receipts = list(receipts)
             await self._async_save_seen_receipts()
             _LOGGER.debug(
                 "Initialized Ista seen receipts with %d existing invoices",
@@ -185,6 +207,8 @@ class IstaDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
 
             new_receipts_found = True
             self._seen_receipt_ids.add(rec_id)
+            if not any(ar.get("receipt_id") == rec_id for ar in self._all_receipts):
+                self._all_receipts.insert(0, r)
 
             date_str = r.get("date", "desconocida")
             eq_type = r.get("type", "recibo")

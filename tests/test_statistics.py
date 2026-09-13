@@ -79,12 +79,68 @@ class TestIstaStatistics(unittest.TestCase):
         # Expect chronological order: 31/01, 28/02, 01/03, 02/03, 03/03, 20/03
         self.assertEqual(len(datapoints), 6)
 
-        readings = [val for _, val in datapoints]
+        readings = [val for _, val, _ in datapoints]
         self.assertEqual(readings, [38.0, 40.0, 40.2, 40.5, 40.8, 42.5])
 
+        # Verify cumulative sums are strictly monotonic
+        sums = [cum for _, _, cum in datapoints]
+        self.assertEqual(sums, [3.0, 5.0, 5.2, 5.5, 5.8, 7.5])
+
         # Verify timestamps are strictly increasing
-        timestamps = [dt for dt, _ in datapoints]
+        timestamps = [dt for dt, _, _ in datapoints]
         self.assertEqual(timestamps, sorted(timestamps))
+
+    def test_meter_replacement_continuity(self):
+        """Test that meter replacements do not drop new meter readings and accumulate sum correctly."""
+        group_data = {
+            "serial": "537204735",
+            "unit": "m3",
+            "current_reading": 38.539,
+            "current_reading_date": "06/09/2026",
+            "monthly_history": [
+                {
+                    "serial": "847240102",
+                    "date": "10/12/2025",
+                    "previous_reading": 316.0,
+                    "current_reading": 323.0,
+                    "consumption": 7.0,
+                    "incidence": "Cierre equipo y modulo mobile",
+                },
+                {
+                    "serial": "537204735",
+                    "date": "10/01/2026",
+                    "previous_reading": 0.0,
+                    "current_reading": 8.0,
+                    "consumption": 8.0,
+                    "incidence": "Sin incidencia",
+                },
+                {
+                    "serial": "537204735",
+                    "date": "10/02/2026",
+                    "previous_reading": 8.0,
+                    "current_reading": 13.0,
+                    "consumption": 5.0,
+                    "incidence": "Sin incidencia",
+                },
+            ],
+            "daily_readings": {
+                "05/09/2026": 38.5,
+                "06/09/2026": 38.539,
+            },
+        }
+
+        datapoints = extract_historical_datapoints(group_data, tz=timezone.utc)
+        self.assertEqual(len(datapoints), 5)
+
+        # Readings should track physical dials (including the drop when replaced)
+        readings = [val for _, val, _ in datapoints]
+        self.assertEqual(readings, [323.0, 8.0, 13.0, 38.5, 38.539])
+
+        # Sum must remain strictly non-decreasing across meter change
+        cumulative_sums = [cum for _, _, cum in datapoints]
+        self.assertEqual(cumulative_sums, [7.0, 15.0, 20.0, 45.5, 45.539])
+        for i in range(1, len(cumulative_sums)):
+            self.assertGreaterEqual(cumulative_sums[i], cumulative_sums[i - 1])
 
     def test_estimated_cost_calculation(self):
         """Test unbilled cost calculation logic."""

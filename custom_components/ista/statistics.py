@@ -132,12 +132,14 @@ def parse_flexible_date(date_str: Optional[str], tz=None) -> Optional[datetime]:
 
 def extract_historical_datapoints(
     group_data: Dict[str, Any], tz=None
-) -> List[Tuple[datetime, float]]:
-    """Extract and combine historical readings into a chronologically sorted series."""
-    datapoints_map: Dict[datetime, float] = {}
+) -> List[Tuple[datetime, float, float]]:
+    """Extract and combine historical readings into a chronologically sorted series with accumulated consumption.
 
-    # 1. Extract from monthly history
+    Returns: List of (datetime, reading_state, cumulative_consumption_sum).
+    """
+    # 1. Extract and sort monthly history
     monthly_rows = group_data.get("monthly_history", [])
+    parsed_monthly: List[Tuple[datetime, Dict[str, Any]]] = []
     for row in monthly_rows:
         if not isinstance(row, dict):
             continue
@@ -146,55 +148,61 @@ def extract_historical_datapoints(
         if reading is not None and date_str:
             dt = parse_flexible_date(date_str, tz=tz)
             if dt:
-                datapoints_map[dt] = float(reading)
+                parsed_monthly.append((dt, row))
 
-    # 2. Extract from daily radio readings (table listaLecturasRadio)
+    parsed_monthly.sort(key=lambda item: item[0])
+
+    series: List[Tuple[datetime, float, float]] = []
+    accumulated_sum = 0.0
+    last_reading: Optional[float] = None
+    last_dt: Optional[datetime] = None
+
+    for dt, r in parsed_monthly:
+        curr_r = float(r["current_reading"])
+        prev_r = float(r["previous_reading"]) if r.get("previous_reading") is not None else curr_r
+        # If Ista gives consumption, use it; otherwise compute positive delta
+        if r.get("consumption") is not None and float(r["consumption"]) >= 0:
+            consumption = float(r["consumption"])
+        else:
+            consumption = max(0.0, curr_r - prev_r)
+
+        accumulated_sum += consumption
+        series.append((dt, curr_r, round(accumulated_sum, 3)))
+        last_reading = curr_r
+        last_dt = dt
+
+    # 2. Extract and incorporate daily radio readings (listaLecturasRadio)
     daily_readings = group_data.get("daily_readings", {})
+    sorted_daily: List[Tuple[datetime, float]] = []
     if isinstance(daily_readings, dict):
         for date_str, reading in daily_readings.items():
             if reading is not None:
                 dt = parse_flexible_date(date_str, tz=tz)
                 if dt:
-                    datapoints_map[dt] = float(reading)
+                    sorted_daily.append((dt, float(reading)))
 
-    # 3. Extract latest current reading if available
+    sorted_daily.sort(key=lambda item: item[0])
+
+    for dt, reading in sorted_daily:
+        if last_dt is None or dt > last_dt:
+            delta = max(0.0, reading - (last_reading if last_reading is not None else reading))
+            accumulated_sum += delta
+            series.append((dt, reading, round(accumulated_sum, 3)))
+            last_reading = reading
+            last_dt = dt
+
+    # 3. Extract latest current reading if available and newer than all previous points
     current_reading = group_data.get("current_reading")
     current_date_str = group_data.get("current_reading_date")
     if current_reading is not None and current_date_str:
         dt = parse_flexible_date(current_date_str, tz=tz)
-        if dt:
-            datapoints_map[dt] = float(current_reading)
+        if dt and (last_dt is None or dt > last_dt):
+            curr_val = float(current_reading)
+            delta = max(0.0, curr_val - (last_reading if last_reading is not None else curr_val))
+            accumulated_sum += delta
+            series.append((dt, curr_val, round(accumulated_sum, 3)))
 
-    if not datapoints_map:
-        return []
-
-    # Sort chronologically
-    sorted_items = sorted(datapoints_map.items(), key=lambda item: item[0])
-
-    # Sanitize and keep non-decreasing values (TOTAL_INCREASING sensor requirement)
-    cleaned_series: List[Tuple[datetime, float]] = []
-    last_valid_reading = 0.0
-
-    for dt, reading in sorted_items:
-        if reading is None or reading <= 0:
-            continue
-        # Avoid anomalous drops if meter hasn't reset
-        if reading < last_valid_reading:
-            # Check if this might be a meter replacement or minor outlier
-            # If reading is significantly lower (>10% drop), skip unless it's the start
-            if last_valid_reading > 0 and (last_valid_reading - reading) > 0.5:
-                _LOGGER.debug(
-                    "Skipping non-monotonic reading on %s: %s (previous: %s)",
-                    dt,
-                    reading,
-                    last_valid_reading,
-                )
-                continue
-
-        cleaned_series.append((dt, reading))
-        last_valid_reading = reading
-
-    return cleaned_series
+    return series
 
 
 def extract_historical_cost_datapoints(
@@ -245,6 +253,7 @@ async def async_import_ista_statistics(
     hass: HomeAssistant,
     coordinator: IstaDataUpdateCoordinator,
     target_group: Optional[str] = None,
+    clear_existing: bool = True,
 ) -> Dict[str, int]:
     """Import historical readings and invoice costs from Ista into Home Assistant recorder statistics."""
     if "recorder" not in hass.config.components:
@@ -252,6 +261,7 @@ async def async_import_ista_statistics(
         return {}
 
     try:
+        from homeassistant.components.recorder import get_instance
         from homeassistant.components.recorder.models import (
             StatisticData,
             StatisticMetaData,
@@ -270,14 +280,15 @@ async def async_import_ista_statistics(
     tz = dt_util.get_time_zone(hass.config.time_zone)
     results: Dict[str, int] = {}
 
-    # 1. Fetch all historical receipts across all pages if possible
+    # 1. Fetch all historical receipts across all pages if possible and sync with coordinator
+    all_receipts = []
     try:
         all_receipts = await hass.async_add_executor_job(coordinator.client.fetch_all_receipts)
         if all_receipts:
-            coordinator.data["receipts"] = all_receipts
+            await coordinator.async_update_all_receipts(all_receipts)
     except Exception as err:
         _LOGGER.warning("No se pudo obtener la paginación completa de facturas, usando recibos en caché: %s", err)
-        all_receipts = coordinator.data.get("receipts", [])
+        all_receipts = getattr(coordinator, "_all_receipts", []) or coordinator.data.get("receipts", [])
 
     # 2. Import consumption physical readings (m³ and kWh)
     targets = []
@@ -321,26 +332,39 @@ async def async_import_ista_statistics(
             results[group_key] = 0
             continue
 
+        if clear_existing:
+            try:
+                get_instance(hass).async_clear_statistics([entity_id])
+                _LOGGER.info("Estadísticas previas eliminadas para %s", entity_id)
+            except Exception as err:
+                _LOGGER.debug("No se pudieron limpiar estadísticas previas de %s: %s", entity_id, err)
+
         stats: List[StatisticData] = []
-        for dt, reading in datapoints:
+        for dt, reading, cumulative_sum in datapoints:
             dt_utc = dt_util.as_utc(dt)
-            # For TOTAL_INCREASING meters, state and sum track the cumulative reading
             stats.append(
                 StatisticData(
                     start=dt_utc,
                     state=round(reading, 3),
-                    sum=round(reading, 3),
+                    sum=round(cumulative_sum, 3),
                 )
             )
 
-        metadata = StatisticMetaData(
-            has_mean=False,
-            has_sum=True,
-            name=None,
-            source="recorder",
-            statistic_id=entity_id,
-            unit_of_measurement=unit,
-        )
+        metadata_kwargs: Dict[str, Any] = {
+            "has_mean": False,
+            "has_sum": True,
+            "name": None,
+            "source": "recorder",
+            "statistic_id": entity_id,
+            "unit_of_measurement": unit,
+        }
+        try:
+            from homeassistant.components.recorder.models import StatisticMeanType
+            metadata_kwargs["mean_type"] = StatisticMeanType.NONE
+        except (ImportError, AttributeError):
+            metadata_kwargs["mean_type"] = 0
+
+        metadata = StatisticMetaData(**metadata_kwargs)
 
         try:
             async_import_statistics(hass, metadata, stats)
@@ -392,6 +416,13 @@ async def async_import_ista_statistics(
             _LOGGER.warning("No se encontró la entidad de coste %s (%s) en el registro", sensor_key, unique_id)
             continue
 
+        if clear_existing:
+            try:
+                get_instance(hass).async_clear_statistics([entity_id])
+                _LOGGER.info("Estadísticas de coste previas eliminadas para %s", entity_id)
+            except Exception as err:
+                _LOGGER.debug("No se pudieron limpiar estadísticas de coste previas de %s: %s", entity_id, err)
+
         cost_stats: List[StatisticData] = []
         for dt, amount, cumulative_cost in cost_datapoints:
             dt_utc = dt_util.as_utc(dt)
@@ -403,14 +434,21 @@ async def async_import_ista_statistics(
                 )
             )
 
-        metadata = StatisticMetaData(
-            has_mean=False,
-            has_sum=True,
-            name=None,
-            source="recorder",
-            statistic_id=entity_id,
-            unit_of_measurement=unit,
-        )
+        cost_metadata_kwargs: Dict[str, Any] = {
+            "has_mean": False,
+            "has_sum": True,
+            "name": None,
+            "source": "recorder",
+            "statistic_id": entity_id,
+            "unit_of_measurement": unit,
+        }
+        try:
+            from homeassistant.components.recorder.models import StatisticMeanType
+            cost_metadata_kwargs["mean_type"] = StatisticMeanType.NONE
+        except (ImportError, AttributeError):
+            cost_metadata_kwargs["mean_type"] = 0
+
+        metadata = StatisticMetaData(**cost_metadata_kwargs)
 
         try:
             async_import_statistics(hass, metadata, cost_stats)

@@ -30,4 +30,10 @@ import_history:
               value: hot_water
             - label: Calefacción
               value: heating
+    clear_existing:
+      name: Limpiar estadísticas previas
+      description: Elimina estadísticas previas de los sensores de Ista antes de importar el histórico limpio (recomendado para corregir datos corruptos).
+      default: true
+      selector:
+        boolean:
 
