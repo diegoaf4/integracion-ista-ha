@@ -362,9 +362,11 @@ class IstaSensorEntity(CoordinatorEntity[IstaDataUpdateCoordinator], SensorEntit
             if self.hass:
                 from homeassistant.helpers import device_registry as dr
                 dev_reg = dr.async_get(self.hass)
-                account_dev = dev_reg.async_get_device(
-                    identifiers={(DOMAIN, f"{subscriber}_account")}
-                )
+                ident = (DOMAIN, f"{subscriber}_account")
+                if hasattr(dev_reg, "async_get_device_by_identifier"):
+                    account_dev = dev_reg.async_get_device_by_identifier(ident)
+                else:
+                    account_dev = dev_reg.async_get_device(identifiers={ident})
                 if account_dev:
                     account_dev_id = account_dev.id
 

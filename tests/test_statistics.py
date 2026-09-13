@@ -187,6 +187,22 @@ class TestIstaStatistics(unittest.TestCase):
         heating_cum = [cum for _, _, cum in heating_series]
         self.assertEqual(heating_cum, [60.00, 140.00])
 
+    def test_extract_historical_cost_datapoints_duplicate_dates(self):
+        """Test that multiple receipts on the same date are aggregated properly into one datapoint."""
+        receipts = [
+            {"date": "10/01/2026", "type": "Agua caliente", "amount": 20.00, "receipt_id": "r1"},
+            {"date": "10/01/2026", "type": "Agua caliente", "amount": 5.50, "receipt_id": "r2"},
+            {"date": "10/02/2026", "type": "Agua caliente", "amount": 30.00, "receipt_id": "r3"},
+        ]
+        hw_series = extract_historical_cost_datapoints(receipts, "hot_water", tz=timezone.utc)
+        self.assertEqual(len(hw_series), 2)
+
+        # Dates should be unique and amounts aggregated
+        amounts = [amt for _, amt, _ in hw_series]
+        cumulative = [cum for _, _, cum in hw_series]
+        self.assertEqual(amounts, [25.50, 30.00])
+        self.assertEqual(cumulative, [25.50, 55.50])
+
 
 if __name__ == "__main__":
     unittest.main()

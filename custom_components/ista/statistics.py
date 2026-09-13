@@ -1,6 +1,7 @@
 """Historical statistics importer for Ista integration."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 import logging
 import re
@@ -158,6 +159,8 @@ def extract_historical_datapoints(
     last_dt: Optional[datetime] = None
 
     for dt, r in parsed_monthly:
+        if last_dt is not None and dt <= last_dt:
+            continue
         curr_r = float(r["current_reading"])
         prev_r = float(r["previous_reading"]) if r.get("previous_reading") is not None else curr_r
         # If Ista gives consumption, use it; otherwise compute positive delta
@@ -210,7 +213,7 @@ def extract_historical_cost_datapoints(
 ) -> List[Tuple[datetime, float, float]]:
     """Extract and combine historical invoice amounts into a cumulative cost series.
 
-    Returns: List of (dt, invoice_amount, cumulative_sum).
+    Returns: List of (dt, invoice_amount, cumulative_sum) with strictly unique, ordered dates.
     """
     filtered_items: List[Tuple[datetime, float]] = []
 
@@ -235,18 +238,45 @@ def extract_historical_cost_datapoints(
     if not filtered_items:
         return []
 
-    # Sort chronologically by date ascending
-    sorted_items = sorted(filtered_items, key=lambda item: item[0])
+    # Group and sum amounts by unique date/timestamp
+    by_date: Dict[datetime, float] = {}
+    for dt, amount in filtered_items:
+        by_date[dt] = round(by_date.get(dt, 0.0) + amount, 2)
 
-    # Calculate cumulative sum
+    # Calculate cumulative sum chronologically
     series: List[Tuple[datetime, float, float]] = []
     accumulated = 0.0
 
-    for dt, amount in sorted_items:
+    for dt in sorted(by_date.keys()):
+        amount = by_date[dt]
         accumulated += amount
-        series.append((dt, round(amount, 2), round(accumulated, 2)))
+        series.append((dt, amount, round(accumulated, 2)))
 
     return series
+
+
+async def async_clear_entity_statistics(hass: HomeAssistant, entity_id: str) -> None:
+    """Clear existing statistics for an entity and wait for recorder to finish."""
+    try:
+        from homeassistant.components.recorder import get_instance
+        recorder_instance = get_instance(hass)
+        done_event = asyncio.Event()
+
+        def _on_done() -> None:
+            hass.loop.call_soon_threadsafe(done_event.set)
+
+        recorder_instance.async_clear_statistics([entity_id], on_done=_on_done)
+        try:
+            async with asyncio.timeout(30):
+                await done_event.wait()
+            _LOGGER.info("Estadísticas previas eliminadas con éxito para %s", entity_id)
+        except TimeoutError:
+            _LOGGER.warning(
+                "Tiempo de espera agotado al limpiar estadísticas de %s (continuará en segundo plano)",
+                entity_id,
+            )
+    except Exception as err:
+        _LOGGER.warning("No se pudieron limpiar estadísticas previas de %s: %s", entity_id, err)
 
 
 async def async_import_ista_statistics(
@@ -333,11 +363,7 @@ async def async_import_ista_statistics(
             continue
 
         if clear_existing:
-            try:
-                get_instance(hass).async_clear_statistics([entity_id])
-                _LOGGER.info("Estadísticas previas eliminadas para %s", entity_id)
-            except Exception as err:
-                _LOGGER.debug("No se pudieron limpiar estadísticas previas de %s: %s", entity_id, err)
+            await async_clear_entity_statistics(hass, entity_id)
 
         stats: List[StatisticData] = []
         for dt, reading, cumulative_sum in datapoints:
@@ -363,6 +389,13 @@ async def async_import_ista_statistics(
             metadata_kwargs["mean_type"] = StatisticMeanType.NONE
         except (ImportError, AttributeError):
             metadata_kwargs["mean_type"] = 0
+
+        if unit in (UnitOfVolume.CUBIC_METERS, "m³"):
+            metadata_kwargs["unit_class"] = "volume"
+        elif unit in (UnitOfEnergy.KILO_WATT_HOUR, "kWh"):
+            metadata_kwargs["unit_class"] = "energy"
+        else:
+            metadata_kwargs["unit_class"] = None
 
         metadata = StatisticMetaData(**metadata_kwargs)
 
@@ -417,11 +450,7 @@ async def async_import_ista_statistics(
             continue
 
         if clear_existing:
-            try:
-                get_instance(hass).async_clear_statistics([entity_id])
-                _LOGGER.info("Estadísticas de coste previas eliminadas para %s", entity_id)
-            except Exception as err:
-                _LOGGER.debug("No se pudieron limpiar estadísticas de coste previas de %s: %s", entity_id, err)
+            await async_clear_entity_statistics(hass, entity_id)
 
         cost_stats: List[StatisticData] = []
         for dt, amount, cumulative_cost in cost_datapoints:
@@ -441,6 +470,7 @@ async def async_import_ista_statistics(
             "source": "recorder",
             "statistic_id": entity_id,
             "unit_of_measurement": unit,
+            "unit_class": None,
         }
         try:
             from homeassistant.components.recorder.models import StatisticMeanType
