@@ -75,120 +75,118 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(entry.add_update_listener(update_listener))
 
-    # Register download service if not already registered
-    if not hass.services.has_service(DOMAIN, SERVICE_DOWNLOAD_RECEIPT):
-        async def handle_download_receipt(call: ServiceCall) -> dict[str, Any] | None:
-            """Service to download a receipt PDF on demand."""
-            receipt_id = call.data.get("receipt_id")
-            custom_target = call.data.get("target_path")
-            inv_type = (
-                call.data.get("invoice_type")
-                or call.data.get("type")
-                or call.data.get("tipo")
-                or "latest"
+    # Register download service
+    async def handle_download_receipt(call: ServiceCall) -> dict[str, Any] | None:
+        """Service to download a receipt PDF on demand."""
+        receipt_id = call.data.get("receipt_id")
+        custom_target = call.data.get("target_path")
+        inv_type = (
+            call.data.get("invoice_type")
+            or call.data.get("type")
+            or call.data.get("tipo")
+            or "latest"
+        )
+
+        # Use first coordinator available
+        coordinators = list(hass.data.get(DOMAIN, {}).values())
+        if not coordinators:
+            _LOGGER.error("No active Ista coordinator found")
+            return None
+        coord: IstaDataUpdateCoordinator = coordinators[0]
+
+        selected_receipt = coord.get_receipt(
+            invoice_type=inv_type,
+            receipt_id=receipt_id,
+        )
+
+        if not selected_receipt or not selected_receipt.get("receipt_id"):
+            _LOGGER.error(
+                "No se encontró ninguna factura para descargar (tipo=%s, receipt_id=%s)",
+                inv_type,
+                receipt_id,
             )
+            return None
 
-            # Use first coordinator available
-            coordinators = list(hass.data.get(DOMAIN, {}).values())
-            if not coordinators:
-                _LOGGER.error("No active Ista coordinator found")
-                return None
-            coord: IstaDataUpdateCoordinator = coordinators[0]
+        target_receipt_id = selected_receipt["receipt_id"]
+        rec_date = selected_receipt.get("date", "desconocida")
+        rec_type = selected_receipt.get("type", "recibo")
+        rec_amount = selected_receipt.get("amount")
 
-            selected_receipt = coord.get_receipt(
-                invoice_type=inv_type,
-                receipt_id=receipt_id,
-            )
+        download_dir = coord.entry.options.get(
+            CONF_INVOICES_PATH, DEFAULT_INVOICES_PATH
+        )
+        safe_date = str(rec_date).replace("/", "-")
+        safe_type = re.sub(r"[^\w\s-]", "", str(rec_type)).strip().replace(" ", "_").lower()
+        safe_id = re.sub(r"[^\w-]", "", str(target_receipt_id))[:10]
+        default_filename = f"factura_ista_{safe_date}_{safe_type}_{safe_id}.pdf"
 
-            if not selected_receipt or not selected_receipt.get("receipt_id"):
-                _LOGGER.error(
-                    "No se encontró ninguna factura para descargar (tipo=%s, receipt_id=%s)",
-                    inv_type,
-                    receipt_id,
-                )
-                return None
+        target_path = custom_target or os.path.join(download_dir, default_filename)
 
-            target_receipt_id = selected_receipt["receipt_id"]
-            rec_date = selected_receipt.get("date", "desconocida")
-            rec_type = selected_receipt.get("type", "recibo")
-            rec_amount = selected_receipt.get("amount")
-
-            download_dir = coord.entry.options.get(
-                CONF_INVOICES_PATH, DEFAULT_INVOICES_PATH
-            )
-            safe_date = str(rec_date).replace("/", "-")
-            safe_type = re.sub(r"[^\w\s-]", "", str(rec_type)).strip().replace(" ", "_").lower()
-            safe_id = re.sub(r"[^\w-]", "", str(target_receipt_id))[:10]
-            default_filename = f"factura_ista_{safe_date}_{safe_type}_{safe_id}.pdf"
-
-            target_path = custom_target or os.path.join(download_dir, default_filename)
-
-            try:
-                pdf_bytes = await hass.async_add_executor_job(
-                    coord.client.download_receipt_pdf, target_receipt_id
-                )
-                await hass.async_add_executor_job(
-                    _save_pdf_to_disk, target_path, pdf_bytes
-                )
-                _LOGGER.info(
-                    "Factura guardada correctamente en %s (tipo=%s, fecha=%s, importe=%s €)",
-                    target_path,
-                    rec_type,
-                    rec_date,
-                    rec_amount,
-                )
-                return {
-                    "receipt_id": target_receipt_id,
-                    "target_path": target_path,
-                    "date": rec_date,
-                    "type": rec_type,
-                    "amount": rec_amount,
-                }
-            except Exception as err:
-                _LOGGER.error("Error al descargar la factura %s: %s", target_receipt_id, err)
-                raise
-
-        register_kwargs = {
-            "schema": SERVICE_DOWNLOAD_SCHEMA,
-        }
         try:
-            from homeassistant.core import SupportsResponse
-            register_kwargs["supports_response"] = SupportsResponse.OPTIONAL
-        except (ImportError, AttributeError):
-            pass
+            pdf_bytes = await hass.async_add_executor_job(
+                coord.client.download_receipt_pdf, target_receipt_id
+            )
+            await hass.async_add_executor_job(
+                _save_pdf_to_disk, target_path, pdf_bytes
+            )
+            _LOGGER.info(
+                "Factura guardada correctamente en %s (tipo=%s, fecha=%s, importe=%s €)",
+                target_path,
+                rec_type,
+                rec_date,
+                rec_amount,
+            )
+            return {
+                "receipt_id": target_receipt_id,
+                "target_path": target_path,
+                "date": rec_date,
+                "type": rec_type,
+                "amount": rec_amount,
+            }
+        except Exception as err:
+            _LOGGER.error("Error al descargar la factura %s: %s", target_receipt_id, err)
+            raise
 
-        hass.services.async_register(
-            DOMAIN,
-            SERVICE_DOWNLOAD_RECEIPT,
-            handle_download_receipt,
-            **register_kwargs,
-        )
+    register_kwargs = {
+        "schema": SERVICE_DOWNLOAD_SCHEMA,
+    }
+    try:
+        from homeassistant.core import SupportsResponse
+        register_kwargs["supports_response"] = SupportsResponse.OPTIONAL
+    except (ImportError, AttributeError):
+        pass
 
-    # Register import history service if not already registered
-    if not hass.services.has_service(DOMAIN, SERVICE_IMPORT_HISTORY):
-        async def handle_import_history(call: ServiceCall) -> None:
-            """Service to import historical readings into recorder statistics."""
-            device_group = call.data.get("device_group")
-            clear_existing = call.data.get("clear_existing", True)
-            coordinators = list(hass.data.get(DOMAIN, {}).values())
-            if not coordinators:
-                _LOGGER.error("No active Ista coordinator found for history import")
-                return
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DOWNLOAD_RECEIPT,
+        handle_download_receipt,
+        **register_kwargs,
+    )
 
-            from .statistics import async_import_ista_statistics
+    # Register import history service
+    async def handle_import_history(call: ServiceCall) -> None:
+        """Service to import historical readings into recorder statistics."""
+        device_group = call.data.get("device_group")
+        clear_existing = call.data.get("clear_existing", True)
+        coordinators = list(hass.data.get(DOMAIN, {}).values())
+        if not coordinators:
+            _LOGGER.error("No active Ista coordinator found for history import")
+            return
 
-            for coord in coordinators:
-                res = await async_import_ista_statistics(
-                    hass, coord, target_group=device_group, clear_existing=clear_existing
-                )
-                _LOGGER.info("Resultado importación histórico Ista: %s", res)
+        from .statistics import async_import_ista_statistics
 
-        hass.services.async_register(
-            DOMAIN,
-            SERVICE_IMPORT_HISTORY,
-            handle_import_history,
-            schema=SERVICE_IMPORT_SCHEMA,
-        )
+        for coord in coordinators:
+            res = await async_import_ista_statistics(
+                hass, coord, target_group=device_group, clear_existing=clear_existing
+            )
+            _LOGGER.info("Resultado importación histórico Ista: %s", res)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_IMPORT_HISTORY,
+        handle_import_history,
+        schema=SERVICE_IMPORT_SCHEMA,
+    )
 
     return True
 
