@@ -139,7 +139,7 @@ SENSOR_DESCRIPTIONS: tuple[IstaSensorEntityDescription, ...] = (
     IstaSensorEntityDescription(
         key="hot_water_latest_receipt",
         translation_key="hot_water_latest_receipt",
-        name="Agua Caliente Última Factura",
+        name="Última Factura Agua Caliente",
         device_group="hot_water",
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement="€",
@@ -238,7 +238,7 @@ SENSOR_DESCRIPTIONS: tuple[IstaSensorEntityDescription, ...] = (
     IstaSensorEntityDescription(
         key="heating_latest_receipt",
         translation_key="heating_latest_receipt",
-        name="Calefacción Última Factura",
+        name="Última Factura Calefacción",
         device_group="heating",
         device_class=SensorDeviceClass.MONETARY,
         native_unit_of_measurement="€",

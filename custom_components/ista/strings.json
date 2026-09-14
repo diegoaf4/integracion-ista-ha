@@ -61,7 +61,7 @@
         "name": "Agua caliente coste total facturado"
       },
       "hot_water_latest_receipt": {
-        "name": "Agua caliente última factura"
+        "name": "Última factura agua caliente"
       },
       "heating_current_reading": {
         "name": "Calefacción lectura actual"
@@ -79,7 +79,7 @@
         "name": "Calefacción coste total facturado"
       },
       "heating_latest_receipt": {
-        "name": "Calefacción última factura"
+        "name": "Última factura calefacción"
       },
       "latest_receipt_overall": {
         "name": "Última factura Ista"
