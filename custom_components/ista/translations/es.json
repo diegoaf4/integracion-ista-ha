@@ -90,5 +90,40 @@
         "name": "Importar histórico de lecturas"
       }
     }
+  },
+  "services": {
+    "download_receipt": {
+      "name": "Descargar factura Ista",
+      "description": "Descarga el archivo PDF de una factura de Ista al almacenamiento local de Home Assistant.",
+      "fields": {
+        "invoice_type": {
+          "name": "Tipo de factura",
+          "description": "Selecciona entre calefacción o agua caliente. Por defecto descarga la más reciente de las dos."
+        },
+        "receipt_id": {
+          "name": "ID de recibo",
+          "description": "Identificador específico del recibo (opcional, anula la selección por tipo si se especifica)."
+        },
+        "target_path": {
+          "name": "Ruta de destino",
+          "description": "Ruta absoluta en disco donde guardar el archivo PDF (opcional, por defecto se guarda en /config/www/ista_facturas/)."
+        }
+      }
+    },
+    "import_history": {
+      "name": "Importar histórico de lecturas Ista",
+      "description": "Importa las lecturas acumuladas históricas a las estadísticas a largo plazo (LTS) de Home Assistant.",
+      "fields": {
+        "device_group": {
+          "name": "Servicio / Contador",
+          "description": "Filtrar por tipo de contador a importar (opcional, por defecto importa tanto agua caliente como calefacción)."
+        },
+        "clear_existing": {
+          "name": "Limpiar estadísticas previas",
+          "description": "Elimina estadísticas previas de los sensores de Ista antes de importar el histórico limpio."
+        }
+      }
+    }
   }
 }
+

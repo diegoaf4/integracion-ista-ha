@@ -2,9 +2,22 @@ download_receipt:
   name: Descargar factura Ista
   description: Descarga el archivo PDF de una factura de Ista al almacenamiento local de Home Assistant.
   fields:
+    invoice_type:
+      name: Tipo de factura
+      description: Selecciona entre calefacción o agua caliente (por defecto descarga la más reciente de las dos).
+      default: latest
+      selector:
+        select:
+          options:
+            - label: "Más reciente (por defecto)"
+              value: "latest"
+            - label: "Agua Caliente"
+              value: "hot_water"
+            - label: "Calefacción"
+              value: "heating"
     receipt_id:
       name: ID de recibo
-      description: Identificador del recibo (opcional, por defecto se descarga la última factura emitida).
+      description: Identificador específico del recibo (opcional, anula la selección por tipo si se especifica).
       example: "N5p2KpC_L2bbQ_T56lPZdg"
       selector:
         text:

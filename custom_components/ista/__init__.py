@@ -34,6 +34,9 @@ SERVICE_DOWNLOAD_SCHEMA = vol.Schema(
     {
         vol.Optional("receipt_id"): cv.string,
         vol.Optional("target_path"): cv.string,
+        vol.Optional("invoice_type", default="latest"): cv.string,
+        vol.Optional("type"): cv.string,
+        vol.Optional("tipo"): cv.string,
     }
 )
 
@@ -74,50 +77,91 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register download service if not already registered
     if not hass.services.has_service(DOMAIN, SERVICE_DOWNLOAD_RECEIPT):
-        async def handle_download_receipt(call: ServiceCall) -> None:
+        async def handle_download_receipt(call: ServiceCall) -> dict[str, Any] | None:
             """Service to download a receipt PDF on demand."""
             receipt_id = call.data.get("receipt_id")
             custom_target = call.data.get("target_path")
+            inv_type = (
+                call.data.get("invoice_type")
+                or call.data.get("type")
+                or call.data.get("tipo")
+                or "latest"
+            )
 
             # Use first coordinator available
             coordinators = list(hass.data.get(DOMAIN, {}).values())
             if not coordinators:
                 _LOGGER.error("No active Ista coordinator found")
-                return
+                return None
             coord: IstaDataUpdateCoordinator = coordinators[0]
 
-            if not receipt_id:
-                receipts = coord.data.get("receipts", [])
-                if receipts:
-                    receipt_id = receipts[0].get("receipt_id")
+            selected_receipt = coord.get_receipt(
+                invoice_type=inv_type,
+                receipt_id=receipt_id,
+            )
 
-            if not receipt_id:
-                _LOGGER.error("No receipt ID specified or found in recent receipts")
-                return
+            if not selected_receipt or not selected_receipt.get("receipt_id"):
+                _LOGGER.error(
+                    "No se encontró ninguna factura para descargar (tipo=%s, receipt_id=%s)",
+                    inv_type,
+                    receipt_id,
+                )
+                return None
+
+            target_receipt_id = selected_receipt["receipt_id"]
+            rec_date = selected_receipt.get("date", "desconocida")
+            rec_type = selected_receipt.get("type", "recibo")
+            rec_amount = selected_receipt.get("amount")
 
             download_dir = coord.entry.options.get(
                 CONF_INVOICES_PATH, DEFAULT_INVOICES_PATH
             )
-            target_path = custom_target or os.path.join(
-                download_dir, f"factura_ista_{receipt_id}.pdf"
-            )
+            safe_date = str(rec_date).replace("/", "-")
+            safe_type = re.sub(r"[^\w\s-]", "", str(rec_type)).strip().replace(" ", "_").lower()
+            safe_id = re.sub(r"[^\w-]", "", str(target_receipt_id))[:10]
+            default_filename = f"factura_ista_{safe_date}_{safe_type}_{safe_id}.pdf"
+
+            target_path = custom_target or os.path.join(download_dir, default_filename)
 
             try:
                 pdf_bytes = await hass.async_add_executor_job(
-                    coord.client.download_receipt_pdf, receipt_id
+                    coord.client.download_receipt_pdf, target_receipt_id
                 )
                 await hass.async_add_executor_job(
                     _save_pdf_to_disk, target_path, pdf_bytes
                 )
-                _LOGGER.info("Saved receipt PDF to %s", target_path)
+                _LOGGER.info(
+                    "Factura guardada correctamente en %s (tipo=%s, fecha=%s, importe=%s €)",
+                    target_path,
+                    rec_type,
+                    rec_date,
+                    rec_amount,
+                )
+                return {
+                    "receipt_id": target_receipt_id,
+                    "target_path": target_path,
+                    "date": rec_date,
+                    "type": rec_type,
+                    "amount": rec_amount,
+                }
             except Exception as err:
-                _LOGGER.error("Failed to download receipt via service: %s", err)
+                _LOGGER.error("Error al descargar la factura %s: %s", target_receipt_id, err)
+                raise
+
+        register_kwargs = {
+            "schema": SERVICE_DOWNLOAD_SCHEMA,
+        }
+        try:
+            from homeassistant.core import SupportsResponse
+            register_kwargs["supports_response"] = SupportsResponse.OPTIONAL
+        except (ImportError, AttributeError):
+            pass
 
         hass.services.async_register(
             DOMAIN,
             SERVICE_DOWNLOAD_RECEIPT,
             handle_download_receipt,
-            schema=SERVICE_DOWNLOAD_SCHEMA,
+            **register_kwargs,
         )
 
     # Register import history service if not already registered

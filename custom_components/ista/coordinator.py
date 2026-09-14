@@ -5,25 +5,54 @@ from datetime import timedelta
 import logging
 import os
 import re
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.storage import Store
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+try:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.storage import Store
+    from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+except ImportError:
+    ConfigEntry = Any  # type: ignore[misc, assignment]
+    HomeAssistant = Any  # type: ignore[misc, assignment]
+    Store = Any  # type: ignore[misc, assignment]
 
-from .const import (
-    CONF_DOWNLOAD_INVOICES,
-    CONF_HEATING_PRICE,
-    CONF_HOT_WATER_PRICE,
-    CONF_INVOICES_PATH,
-    DEFAULT_DOWNLOAD_INVOICES,
-    DEFAULT_INVOICES_PATH,
-    DEFAULT_SCAN_INTERVAL,
-    DOMAIN,
-    EVENT_NEW_INVOICE,
-)
-from .ista_client import IstaAuthError, IstaClient, IstaConnectionError
+    class DataUpdateCoordinator:  # type: ignore[no-redef]
+        def __class_getitem__(cls, item: Any) -> Any:
+            return cls
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+    class UpdateFailed(Exception):  # type: ignore[no-redef]
+        pass
+
+try:
+    from .const import (
+        CONF_DOWNLOAD_INVOICES,
+        CONF_HEATING_PRICE,
+        CONF_HOT_WATER_PRICE,
+        CONF_INVOICES_PATH,
+        DEFAULT_DOWNLOAD_INVOICES,
+        DEFAULT_INVOICES_PATH,
+        DEFAULT_SCAN_INTERVAL,
+        DOMAIN,
+        EVENT_NEW_INVOICE,
+    )
+    from .ista_client import IstaAuthError, IstaClient, IstaConnectionError
+except ImportError:
+    from const import (  # type: ignore[no-redef]
+        CONF_DOWNLOAD_INVOICES,
+        CONF_HEATING_PRICE,
+        CONF_HOT_WATER_PRICE,
+        CONF_INVOICES_PATH,
+        DEFAULT_DOWNLOAD_INVOICES,
+        DEFAULT_INVOICES_PATH,
+        DEFAULT_SCAN_INTERVAL,
+        DOMAIN,
+        EVENT_NEW_INVOICE,
+    )
+    from ista_client import IstaAuthError, IstaClient, IstaConnectionError  # type: ignore[no-redef]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -262,3 +291,84 @@ class IstaDataUpdateCoordinator(DataUpdateCoordinator[Dict[str, Any]]):
 
         if new_receipts_found:
             await self._async_save_seen_receipts()
+
+    def get_receipt(
+        self,
+        invoice_type: Optional[str] = None,
+        receipt_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Get a receipt matching the specified criteria."""
+        pool = self._all_receipts if self._all_receipts else (self.data.get("receipts", []) if self.data else [])
+        return select_receipt_to_download(
+            self.data or {},
+            receipts_pool=pool,
+            invoice_type=invoice_type,
+            receipt_id=receipt_id,
+        )
+
+
+def select_receipt_to_download(
+    data: Dict[str, Any],
+    receipts_pool: Optional[List[Dict[str, Any]]] = None,
+    invoice_type: Optional[str] = None,
+    receipt_id: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Select the appropriate receipt dictionary based on criteria.
+
+    Supports filtering by receipt_id, invoice_type ('hot_water' or 'heating'),
+    or defaulting to the most recent invoice overall between both services.
+    """
+    pool = receipts_pool if receipts_pool is not None else data.get("receipts", [])
+
+    if receipt_id:
+        for r in pool:
+            if r.get("receipt_id") == receipt_id:
+                return r
+        return {"receipt_id": receipt_id}
+
+    type_norm = str(invoice_type or "latest").strip().lower()
+
+    if type_norm in ("hot_water", "agua", "acs", "agua_caliente", "agua caliente", "caliente"):
+        rec = data.get("hot_water", {}).get("latest_receipt")
+        if rec and rec.get("receipt_id"):
+            return rec
+        for r in pool:
+            if any(term in r.get("type", "").lower() for term in ("agua", "acs")):
+                return r
+        return None
+
+    if type_norm in ("heating", "calefaccion", "calefacción", "calor", "optosonic"):
+        rec = data.get("heating", {}).get("latest_receipt")
+        if rec and rec.get("receipt_id"):
+            return rec
+        for r in pool:
+            if any(term in r.get("type", "").lower() for term in ("optosonic", "calefacc", "calor")):
+                return r
+        return None
+
+    # Default: most recent receipt between the two services (calefacción vs agua caliente)
+    hw_rec = data.get("hot_water", {}).get("latest_receipt")
+    heat_rec = data.get("heating", {}).get("latest_receipt")
+
+    if hw_rec and not heat_rec:
+        return hw_rec
+    if heat_rec and not hw_rec:
+        return heat_rec
+    if hw_rec and heat_rec:
+        try:
+            from .statistics import parse_flexible_date
+        except ImportError:
+            from statistics import parse_flexible_date
+        hw_dt = parse_flexible_date(hw_rec.get("date"))
+        heat_dt = parse_flexible_date(heat_rec.get("date"))
+        if hw_dt and heat_dt:
+            return hw_rec if hw_dt >= heat_dt else heat_rec
+        if hw_dt:
+            return hw_rec
+        if heat_dt:
+            return heat_rec
+
+    if pool:
+        return pool[0]
+
+    return None
